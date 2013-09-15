@@ -1,6 +1,6 @@
 # arianna
 
-This is a Clojure data validation library. Specifically, it's a fork of Stuart Sierra's excellent [validate](https://github.com/stuartsierra/validate) library.  That said, I'm not averse to ripping off code and good ideas from other validation libraries including [Validateur](https://github.com/michaelklishin/validateur) and [libnoir](https://github.com/noir-clojure/lib-noir).
+Arianna is a Clojure data validation library. Specifically, it's a fork of Stuart Sierra's excellent [validate](https://github.com/stuartsierra/validate) library.  That said, I'm not averse to ripping off code and good ideas from other validation libraries including [Validateur](https://github.com/michaelklishin/validateur) and [libnoir](https://github.com/noir-clojure/lib-noir).
 
 **ALPHA code:** Even with ripping off Stuart Sierra's design, this is a young library.  Pretty much the entire API is subject to change
 without warning in subsequent 0.x releases.
@@ -253,6 +253,18 @@ if any keys are missing.
 
 All pull requests, issues and conversations are welcome, but I do ask that any changes come with tests that demonstrate the original problem.
 
+## FAQ
+
+Q. Why is it called Arianna?
+A. [Listen](http://www.youtube.com/watch?v=VZc2npAmQXM)
+
 ## Copyright and License
 
-Copyright (c) Stuart Sierra, Julian Birch 2013. All rights reserved. The use and distribution terms for this software are covered by the Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php) which can be found in the file epl-v10.html at the root of this distribution. By using this software in any fashion, you are agreeing to be bound by the terms of this license. You must not remove this notice, or any other, from this software.
+Copyright (c) Stuart Sierra, Julian Birch 2013. All rights reserved.
+The use and distribution terms for this software are covered by
+the Eclipse Public License 1.0
+(http://opensource.org/licenses/eclipse-1.0.php) which can be
+found in the file epl-v10.html at the root of this distribution.
+By using this software in any fashion, you are agreeing to be
+bound by the terms of this license. You must not remove this
+notice, or any other, from this software.
