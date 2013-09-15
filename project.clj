@@ -1,8 +1,9 @@
-(defproject com.stuartsierra/validate "0.1.0-SNAPSHOT"
-  :description "Composable data validation functions"
-  :url "https://github.com/stuartsierra/validate"
+(defproject net.colourcoding/arianna "0.1.2"
+  :description "YANIH validation library"
+  :url "https://github.com/JulianBirch/arianna"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
+  :dependencies [[spyscope "0.1.3"]]
   :profiles {:dev {:dependencies [[org.clojure/clojure "1.5.1"]
                                   [org.clojure/tools.namespace "0.2.3"]]
                    :source-paths ["dev"]}

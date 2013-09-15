@@ -1,7 +1,7 @@
 (ns user
   "Conveniences for interactive development and testing."
   (:require [clojure.tools.namespace.repl :refer (refresh refresh-all)]
-            [com.stuartsierra.validate :as v]
+            [arianna :as v]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.pprint :as pprint :refer (pprint)])
@@ -14,7 +14,7 @@
                                                            (every? (fn [[k v]] (and (keyword? k)
                                                                                     (sequential? v))) v))) v))) %)])
 
-(def m1
+#_(def m1
   (v/and (v/is map?)
          (v/keys (v/are string?))
          (v/vals (v/every (v/and (v/is map?)
@@ -69,3 +69,6 @@
 
 (defn readme []
   (overwrite-transcript "dev/readme.clj"))
+
+(defn readme-out []
+  (run-transcript "dev/readme.clj"))
