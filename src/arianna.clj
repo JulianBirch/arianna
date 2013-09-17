@@ -31,18 +31,17 @@
 (defn- add-exception [[error] exception]
   (list (assoc error :exception exception)))
 
-(defn protect-exception [f]
-  (fn [this value]
-    (if *enable-protect-exception*
-      (try (f this value)
-           (catch Exception exception
-             (update-in (report-failure this value)
-                        [:errors] add-exception exception)))
-      (f this value))))
-
 (defprotocol IValidator
   "Validator abstraction"
-  (validate [this value] "Evaluates the validator."))
+  (validate- [this value] "Evaluates the validator."))
+
+(defn validate [validator value]
+  (if *enable-protect-exception*
+      (try (validate- validator value)
+           (catch Exception exception
+             (update-in (report-failure validator value)
+                        [:errors] add-exception exception)))
+      (validate- validator value)))
 
 (defn valid?
   "Returns true if value passes the validator."
@@ -53,35 +52,75 @@
   ([value] (->ValidationResult :ok value nil value))
   ([input result] (->ValidationResult :ok result nil input)))
 
-(defn test-validator [predicate]
-  (fn [this value] (if (predicate value)
-                    (report-success value)
-                    (report-failure this value))))
+(defn test-validator [predicate this value]
+  (if (predicate value)
+    (report-success value)
+    (report-failure this value)))
+
+(defrecord PredicateValidator [predicate]
+  IValidator
+  (validate- [this value] (test-validator predicate this value)))
 
 (defrecord FnValidator [f]
   IValidator
-  (validate [this value] (f this value)))
+  (validate- [this value] (f this value)))
 
 (defn enhance-error [this result]
   (update-in result [:errors]
              (fn [e] (map #(assoc % :validator this) e))))
 
 (defn projection-validation-method [projection fail]
-  (protect-exception
-   (fn [this value]
-     (let [result (projection value)]
-       (if (clojure.core/and (map? result)
-                             (contains? result :status))
-         (if (valid? result)
-           result
-           (enhance-error this result))
-         (if (= result fail)
-           (report-failure this value result)
-           (report-success value result)))))))
+  (fn [this value]
+    (let [result (projection value)]
+      (if (clojure.core/and (map? result)
+                            (contains? result :status))
+        (if (valid? result)
+          result
+          (enhance-error this result))
+        (if (= result fail)
+          (report-failure this value result)
+          (report-success value result))))))
+
+(defn to-transform-fn [v]
+  (clojure.core/cond
+   (vector? v) (fn lookup [input] (get-in input v ::missing))
+   (keyword? v) (fn lookup [input] (get input v ::missing))
+   :else v))
+
+(defn transform
+  ([v] (transform v nil))
+  ([v fail]
+     (-> (to-transform-fn v)
+         (projection-validation-method fail)
+         ->FnValidator
+         (assoc :projection v))))
+
+(defn is-valid-empty [rules value]
+  (clojure.core/or
+   (if (contains? rules :missing)
+     (= value ::missing))
+   (if (contains? rules :nil)
+     (nil? value))
+   (clojure.core/and
+    (contains? rules :blank)
+    (string? value)
+    (s/blank? value))))
+
+(defrecord EmptyValidator [rules]
+  IValidator
+  (validate- [this value]
+    (test-validator (partial is-valid-empty rules)
+                    this value)))
+
+(defn- valid-projection? [proj]
+  (clojure.core/or (symbol? proj)
+                   (keyword? proj)
+                   (clojure.core/and
+                    (vector? proj)
+                    (every? keyword? proj))))
 
 (defn validator
-  ([predicate] (->FnValidator
-                (protect-exception (test-validator predicate))))
+  ([predicate] (->PredicateValidator predicate))
   ([predicate expected]
      (merge (validator predicate) expected)))
 
@@ -112,20 +151,16 @@
 
 (defrecord CompositeValidator [validators combine]
   IValidator
-  (validate [this value] (combine this value)))
-
-(defn transform
-  ([v] (transform v nil))
-  ([v fail] (->FnValidator (projection-validation-method v fail))))
+  (validate- [this value] (combine this value)))
 
 (defmacro as
   "Returns a validator which will call (proj ~@args input).
   proj must be a symbol.  "
   ([proj]
-     {:pre [(symbol? proj)]}
+     {:pre [(valid-projection? proj)]}
      `(assoc (transform ~proj) :projection '~&form))
   ([proj & args]
-     {:pre [(symbol? proj)]}
+     {:pre [(valid-projection? proj)]}
      `(assoc (transform (partial ~proj ~@args))
         :projection '~&form)))
 
@@ -241,17 +276,6 @@
 (defn comp [& validators]
   (composite validators comp-combine))
 
-(defn has-fn [ks input]
-  (let [v (get-in input ks ::not-found)]
-    (if (= ::not-found v)
-      (report-failure input nil)
-      (report-success input v))))
-
-(defn has-optional-fn [ks input]
-  (report-success input (get-in input ks nil)))
-
-(defn projection-optional [f this input]
-  (report-success input (f input)))
 ;;; Embedding normal functions in validators
 
 (defn call-fn
@@ -260,9 +284,7 @@
   exception, validation fails. validators are validation functions
   combined as with 'and'."
   [f validator]
-  (comp validator
-        (->FnValidator
-         (protect-exception (partial projection-optional f)))))
+  (comp validator (transform f ::fail)))
 
 (defmacro call
   "Returns a validation that calls the function named by
@@ -296,32 +318,18 @@
   "Returns a validator that checks for the presence of keys
   in a nested associative structure. ks is a sequence of keys."
   [ks]
-  (assoc (to-validator (partial has-fn ks))
+  (assoc (transform ks ::missing)
     :keys ks
     :operation :has))
-
-(defn has-optional
-  "Returns a validator that checks for the presence of keys
-  in a nested associative structure. ks is a sequence of keys."
-  [ks]
-  (assoc (to-validator (partial has-optional-fn ks))
-    :keys ks
-    :operation :has-optional))
-
-(defn optional
-  ([validator is-blank?]
-     (->FnValidator
-      (protect-exception
-       (fn [this input] (if (is-blank? input)
-                         (report-success this)
-                         (validate validator input))))))
-  ([validator] (optional validator nil?)))
 
 (defn if-in
   "Like 'in' but does not return an error if the structure does not
   contain the given keys."
   [ks & validators]
-  (comp (optional (apply and validators)) (has-optional ks)))
+  (comp (or
+         (->EmptyValidator #{:missing :nil :blank})
+         (apply and validators))
+        (transform ks ::fail)))
 
 (defn in
   "Returns a composition of validator functions that operate on a value
@@ -346,7 +354,7 @@
   element of the input collection."
   [& validators]
   (assoc (->FnValidator
-          (protect-exception #(every-validate validators %1 %2)))
+          #(every-validate validators %1 %2))
     :operator :every))
 
 (defn are-validate-fn [pred this input]
@@ -359,8 +367,7 @@
                           input))))
 (defn are-validator
   ([predicate] (->FnValidator
-                (protect-exception
-                 #(are-validate-fn predicate %1 %2))))
+                #(are-validate-fn predicate %1 %2)))
   ([predicate expected]
      (merge (are-validator predicate) expected)))
 
@@ -390,13 +397,12 @@
                     (partition 2)
                     (map (juxt validator transform)))]
     (->FnValidator
-     (protect-exception
-      (fn [this input]
-        (if-let [clause (->> clauses
-                             (filter (partial clause-matches input))
-                             first)]
-          (validate (second clause) input)
-          (report-failure this input)))))))
+     (fn [this input]
+       (if-let [clause (->> clauses
+                            (filter (partial clause-matches input))
+                            first)]
+         (validate (second clause) input)
+         (report-failure this input))))))
 
 (defn when
   "Returns a validator function that only checks the validators

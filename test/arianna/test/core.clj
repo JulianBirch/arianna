@@ -112,10 +112,21 @@
   (is (v/valid? john (v/if-in [:address :zip] (v/is string?)))
       "Missing ZIP should be acceptable with if-in."))
 
+
+
 (def dn (v/as v/as-decimal-number))
 
+(def key-projection (v/as :name))
+(def key2-projection (v/as [:address :city]))
+
 (deftest transform
+  (is (= "John Doe" (:result (v/validate key-projection john))))
+  (is (= "Baltimore" (:result (v/validate key2-projection john))))
   (is (= 3 (:result (v/validate dn 3))))
   (is (= "4" (:input (v/validate dn "4"))))
   (is (= 4 (:result (v/validate dn "4"))))
   (is (not (v/valid? "H" dn))))
+
+(deftest hastest
+  (is (v/valid? john (v/has [:address :city])))
+  (is (not (v/valid? john (v/has [:address :zip])))))

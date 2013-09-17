@@ -50,7 +50,9 @@ Obviously, async is likely to result in a serious API change.
 
 Available on Clojars
 
-`[net.colourcoding/arianna "0.1.2"]`
+```clj
+[net.colourcoding/arianna "0.1.2"]
+```
 
 ## Example Usage
 
@@ -86,7 +88,8 @@ The `is` and `is-not` macros transform any boolean predicate function into a val
 The `is` macro only works on symbols. You can transform an abitrary
 boolean predicate function into a validator with the
 `validator` function. `validator` takes a predicate and an optional
-validator description, which must be a map and will be merged into the validator (and hence accessible via the errors).
+validator description, which must be a map and will be merged into
+the validator (and hence accessible via the errors).
 
 ```clj
     (def under-10
@@ -104,7 +107,10 @@ validator description, which must be a map and will be merged into the validator
 
 ### Transform Validations
 
-There's an equivalent macro for transform validations: `as`.  The equivalent of `validator` is `transform`.  `transform` takes an optional second parameter, which is the value a transform returns when it fails.  The default is nil.
+There's an equivalent macro for transform validations: `as`.
+The equivalent of `validator` is `transform`.
+`transform` takes an optional second parameter, which is the
+value a transform returns when it fails.  The default is nil.
 
 ```clj
     (v/validate (v/as v/as-decimal-number) "4")
@@ -127,7 +133,7 @@ Get the error messages out from `ex-data`:
 ```clj
     (ex-data *e)
     ;;=> {:errors ({:value 3.142857142857143,
-    ;;              :expected (v/is integer?)}),
+    ;;              :validator (v/is integer?)}),
     ;;    :line 1,
     ;;    :expr (/ 22.0 7.0),
     ;;    :value 3.142857142857143,
@@ -159,6 +165,7 @@ The `and` function combines multiple validation functions into one.
 This is not the same as `clojure.core/and`, but it does short-circuit
 the same way:
 
+```clj
     (def odd-integer
       (v/and (v/is integer?)
              (v/is odd?)))
@@ -168,14 +175,19 @@ the same way:
 
     (odd-integer 4.0)
     ;;=> ({:expected (v/is integer?), :value 4.0})
+```
 
-`and-all` does the same, but does not short circuit.  This is better for when you want to provide more feedback and less useful when later feedback would be redundant.
+`and-all` does the same, but does not short circuit.  This is better
+for when you want to provide more feedback and less useful when later
+feedback would be redundant.
 
-It also supports `or` and `comp`, which work as you might imagine.  Parameters that aren't validators get `transform` called on them.
+It also supports `or` and `comp`, which work as you might imagine.
+Parameters that aren't validators get `transform` called on them.
 
 ### Branching
 
-There are two branching constructs: `cond` and `when`.  `cond` takes pairs of test and transform validators.
+There are two branching constructs: `cond` and `when`.  `cond` takes
+pairs of test and transform validators.
 
 ### Looking Inside Collections
 
@@ -243,20 +255,27 @@ With `in`, the map must contain the given keys or it fails the
 validation. An alternate form, `if-in`, allows the validation to pass
 if any keys are missing.
 
-```
+```clj
     (v/valid? (v/if-in [:address :zip] (v/is integer?)) john)
     ;;=> true
+```
 
 (Optionals need more work.)
 
 ## Development and Contributing
 
-All pull requests, issues and conversations are welcome, but I do ask that any changes come with tests that demonstrate the original problem.
+All pull requests, issues and conversations are welcome, but I do
+ask that any changes come with tests that demonstrate the original problem.
 
 ## FAQ
 
-Q. Why is it called Arianna?
-A. [Listen](http://www.youtube.com/watch?v=VZc2npAmQXM)
+### Why is it called Arianna?
+[Listen](http://www.youtube.com/watch?v=VZc2npAmQXM)
+
+### Why yet another validation library?
+
+Honestly, to scratch an itch.  However, to contrast it from other validation libraries:
+
 
 ## Copyright and License
 
