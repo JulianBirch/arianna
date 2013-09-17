@@ -274,8 +274,9 @@ ask that any changes come with tests that demonstrate the original problem.
 
 ### Why yet another validation library?
 
-Honestly, to scratch an itch.  However, to contrast it from other validation libraries:
+Honestly, to scratch an itch.  However, the biggest difference is that validate and Validateur represent validators as functions.  This in turn means that feedback is ad-hoc.  Arianna is me trying to come up with a regular way of dealing with feedback.  It's not completely successful at the present time.  Combining the ability to use any function and still have things be data driven is tricky.
 
+libnoir has some useful functionality arianna currently lacks.  I'm planning to rectify that by stealing the code.
 
 ## Copyright and License
 
