@@ -12,6 +12,7 @@
 
 (def ^:dynamic *enable-protect-exception* true)
 
+(defrecord ValidationError [validator value])
 (defrecord ValidationResult [status result errors input])
 
 (defn reduce-
@@ -23,7 +24,7 @@
 (defn report-failure
   ([this input result]
      (->ValidationResult :error result
-                         (list {:validator this :value result})
+                         (list (ValidationError. this input))
                          input))
   ([this value] (report-failure this value value))
   ([value] (report-failure nil value value)))
@@ -236,9 +237,8 @@
                 (reduce- or-f fail))]
     (if (valid? vr)
       vr
-      (let [or-error {:validator this
-                      :errors (:errors vr)
-                      :input value}]
+      (let [or-error (assoc (ValidationError. this value)
+                       :errors (:errors vr))]
         (->ValidationResult :error
                             value
                             (list or-error)
@@ -318,9 +318,7 @@
   "Returns a validator that checks for the presence of keys
   in a nested associative structure. ks is a sequence of keys."
   [ks]
-  (assoc (transform ks ::missing)
-    :keys ks
-    :operation :has))
+  (assoc (transform ks ::missing) :operation :has))
 
 (defn if-in
   "Like 'in' but does not return an error if the structure does not
@@ -329,7 +327,7 @@
   (comp (or
          (->EmptyValidator #{:missing :nil :blank})
          (apply and validators))
-        (transform ks ::fail)))
+        (transform ks ::never-fail)))
 
 (defn in
   "Returns a composition of validator functions that operate on a value
@@ -362,8 +360,7 @@
     (if (empty? r)
       (report-success this input)
       (->ValidationResult :error input
-                          (mapv #(hash-map :validator this
-                                           :value %) r)
+                          (mapv #(ValidationError. this %) r)
                           input))))
 (defn are-validator
   ([predicate] (->FnValidator

@@ -1,6 +1,7 @@
 (ns arianna.test.core
   (:require [arianna :as v]
-            [clojure.test :refer :all]))
+            [clojure.test :refer :all])
+  (:import [arianna ValidationError]))
 
 (def number-validator (v/is number?))
 
@@ -13,7 +14,7 @@
   (is (v/validate number-validator "hi")
       {:status :error
        :result nil
-       :errors [{:validator number-validator :value nil}]
+       :errors [(ValidationError. number-validator "hi")]
        :input "hi"})
   (is (v/valid? "Baltimore" (v/is string?))
       "Baltimore is a string."))
@@ -56,15 +57,15 @@
   (is (v/valid? "Baltimore" (v/and (v/is string?) (v/is string?)))
       "and composite of two items works.")
   (is (= (get-errors odd-integer 4)
-         [{:validator is-odd :value 4}]))
+         [(ValidationError. is-odd 4)]))
   (is (= (get-errors odd-integer 4.0)
-         [{:validator is-integer :value 4.0}]))
+         [(ValidationError. is-integer 4.0)]))
   (is (= (get-errors (v/every is-even) [4 3 8 15])
-         [{:validator is-even :value 3}
-          {:validator is-even :value 15}]))
-  (is (= (get-errors are-even [4 3 8 15])
-         [{:validator are-even :value 3}
-          {:validator are-even :value 15}]))
+         [(ValidationError. is-even 3)
+          (ValidationError. is-even 15)]))
+  (is (= [(ValidationError. are-even 3)
+          (ValidationError. are-even 15)]
+         (get-errors are-even [4 3 8 15])))
   (is (v/valid? "hello" (v/are char?)))
   (is (not (v/valid? 42 (v/are char?)))))
 ; TODO: Are and every should provide value chain
@@ -78,12 +79,10 @@
   (is (v/valid? 3.14 i-or-f))
   (let [[e] (get-errors i-or-f "foo")
         [e1 e2] (:errors e)]
-    (is (= {:validator i-or-f
-            :input "foo"} (dissoc e :errors)))
-    (is (= e1 {:validator is-integer
-               :value "foo"}))
-    (is (= e2 {:validator is-float
-               :value "foo"}))))
+    (is (= (ValidationError. i-or-f "foo")
+          (dissoc e :errors)))
+    (is (= e1 (ValidationError. is-integer "foo")))
+    (is (= e2 (ValidationError. is-float "foo")))))
 
 (deftest to-val
   (let [v (v/to-validator keys)]
@@ -97,8 +96,8 @@
 (def up-to-4-elements (v/count (v/validator #(< % 4))) )
 
 (deftest projection-tests
-  (is (= [{:validator are-string :value 2}]
-         (get-errors simple-map {:a "one", :b 2})))
+  (is (= [(ValidationError. are-string 2)
+          (get-errors simple-map {:a "one", :b 2})]))
   (is (not (v/valid? [:a :b :c :d] up-to-4-elements)))
   (is (v/valid? [:a :c :d] up-to-4-elements)))
 
@@ -111,8 +110,6 @@
       "Missing ZIP should be invalid.")
   (is (v/valid? john (v/if-in [:address :zip] (v/is string?)))
       "Missing ZIP should be acceptable with if-in."))
-
-
 
 (def dn (v/as v/as-decimal-number))
 
