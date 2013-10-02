@@ -278,6 +278,10 @@ Honestly, to scratch an itch.  However, the biggest difference is that validate 
 
 libnoir has some useful functionality arianna currently lacks.  I'm planning to rectify that by stealing the code.
 
+### What's the arianna.validate namespace?
+
+It contains compatibility functions with "validate".  It's mostly useful to see how to move between one and the other.  All the functions are unit tested, so they can be used, but I think the native syntax is preferable.
+
 ## Copyright and License
 
 Copyright (c) Stuart Sierra, Julian Birch 2013. All rights reserved.

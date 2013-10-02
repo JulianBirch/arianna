@@ -53,9 +53,9 @@
   "Like 'in' but does not return an error if the structure does not
   contain the given keys."
   [ks & validators]
-  (a/-> (a/transform ks ::never-fail)
-      a/optional
-      (apply a/and validators)))
+  (a/-> ks
+        a/optional
+        (apply a/and validators)))
 
 (defn in
   "Returns a composition of validator functions that operate on a
