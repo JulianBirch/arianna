@@ -1,48 +1,44 @@
 (ns arianna
-  (:refer-clojure :exclude [and comp cond count keys
-                            or range vals when])
-  (:require [clojure.string :as str]
-            [clojure.edn :as edn]
+  (:refer-clojure :exclude [and comp cond or when ->])
+  (:import [clojure.lang IPersistentVector ISeq Keyword])
+  (:require [clojure.edn :as edn]
             [clojure.string :as s]
             [spyscope.core]))
-
-;;; Core validation
-
-; status is either :ok or :error (:pending may come later)
 
 (def ^:dynamic *enable-protect-exception* true)
 
 (defrecord ValidationError [validator value])
+
+; status is either :ok or :error (:pending may come later)
 (defrecord ValidationResult [status result errors input])
-
-(defn reduce-
-  ([f coll] (let [v (reduce f coll)]
-              (if (reduced? v) @v v)))
-  ([f val coll] (let [v (reduce f val coll)]
-                  (if (reduced? v) @v v))))
-
-(defn report-failure
-  ([this input result]
-     (->ValidationResult :error result
-                         (list (ValidationError. this input))
-                         input))
-  ([this value] (report-failure this value value))
-  ([value] (report-failure nil value value)))
-
-(defn- add-exception [[error] exception]
-  (list (assoc error :exception exception)))
 
 (defprotocol IValidator
   "Validator abstraction"
   (validate- [this value] "Evaluates the validator."))
 
-(defn validate [validator value]
+(defn- strip-reduced [v] (if (reduced? v) @v v))
+
+(defn report-failure
+  ([value] (report-failure nil value value))
+  ([this value] (report-failure this value value))
+  ([this input result]
+     (->ValidationResult :error result
+                         (list (ValidationError. this input))
+                         input)))
+
+(defn- add-exception [[error] exception]
+  (list (assoc error :exception exception)))
+
+(defn internal-validate [validator value]
   (if *enable-protect-exception*
       (try (validate- validator value)
            (catch Exception exception
              (update-in (report-failure validator value)
                         [:errors] add-exception exception)))
       (validate- validator value)))
+
+(defn validate [validator value]
+  (strip-reduced (internal-validate validator value)))
 
 (defn valid?
   "Returns true if value passes the validator."
@@ -53,14 +49,19 @@
   ([value] (->ValidationResult :ok value nil value))
   ([input result] (->ValidationResult :ok result nil input)))
 
-(defn test-validator [predicate this value]
-  (if (predicate value)
-    (report-success value)
-    (report-failure this value)))
+(defn predicate-validate [{:keys [is-required] :as this}
+                          predicate value]
+  (if is-required
+    (if (predicate value)
+      (report-success value)
+      (report-failure this value))
+    (let [r (report-success value)]
+      (if (predicate value) (reduced r) r))))
 
-(defrecord PredicateValidator [predicate]
+(defrecord PredicateValidator [predicate is-required]
   IValidator
-  (validate- [this value] (test-validator predicate this value)))
+  (validate- [this value]
+    (predicate-validate this predicate value)))
 
 (defrecord FnValidator [f]
   IValidator
@@ -73,8 +74,7 @@
 (defn projection-validation-method [projection fail]
   (fn [this value]
     (let [result (projection value)]
-      (if (clojure.core/and (map? result)
-                            (contains? result :status))
+      (if (instance? ValidationResult result)
         (if (valid? result)
           result
           (enhance-error this result))
@@ -91,12 +91,15 @@
 (defn transform
   ([v] (transform v nil))
   ([v fail]
-     (-> (to-transform-fn v)
-         (projection-validation-method fail)
-         ->FnValidator
-         (assoc :projection v))))
+     (if (satisfies? IValidator v)
+       v
+       (clojure.core/->
+        (to-transform-fn v)
+        (projection-validation-method fail)
+        ->FnValidator
+        (assoc :projection v)))))
 
-(defn is-valid-empty [rules value]
+(defn is-empty [rules value]
   (clojure.core/or
    (if (contains? rules :missing)
      (= value ::missing))
@@ -107,21 +110,28 @@
     (string? value)
     (s/blank? value))))
 
-(defrecord EmptyValidator [rules]
+(defrecord EmptyValidator [rules is-required]
   IValidator
   (validate- [this value]
-    (test-validator (partial is-valid-empty rules)
-                    this value)))
+    (let [is-empty #(is-empty rules %)
+          is-empty ((if is-required complement identity) is-empty)]
+      (predicate-validate this is-empty value))))
+
+(def optional (EmptyValidator. #{:missing :nil :blank} false))
+(def required (EmptyValidator. #{:missing :nil :blank} true))
 
 (defn- valid-projection? [proj]
   (clojure.core/or (symbol? proj)
                    (keyword? proj)
-                   (clojure.core/and
-                    (vector? proj)
-                    (every? keyword? proj))))
+                   (vector? proj)))
 
 (defn validator
-  ([predicate] (->PredicateValidator predicate))
+  ([predicate] (->PredicateValidator predicate true))
+  ([predicate expected]
+     (merge (validator predicate) expected)))
+
+(defn optional-validator
+  ([predicate] (->PredicateValidator predicate false))
   ([predicate expected]
      (merge (validator predicate) expected)))
 
@@ -165,12 +175,6 @@
      `(assoc (transform (partial ~proj ~@args))
         :projection '~&form)))
 
-(defn to-validator [v]
-  (clojure.core/cond
-   (satisfies? IValidator v) v
-   (ifn? v) (transform v)
-   :else (throw (ex-info "Not coercible to validator." {:v v}))))
-
 (defn- single
   ([list default]
      (if (nil? (next list))
@@ -180,8 +184,8 @@
 
 (defn composite [validators combine]
   (if-let [v (single validators)]
-    (to-validator v)
-    (->CompositeValidator (mapv to-validator validators)
+    (transform v)
+    (->CompositeValidator (mapv transform validators)
                           combine)))
 
 (defn merge-errors [previous current]
@@ -203,8 +207,9 @@
 (defn make-and-combine [f]
   (fn and-combine [{:keys [validators]} value]
     (->> validators
-         (map #(validate % value))
-         (reduce- f (report-success value)))))
+         (map #(internal-validate % value))
+         (reduce f (report-success value))
+         strip-reduced)))
 
 (def and-combine (make-and-combine and-f))
 (def and-all-combine (make-and-combine and-all-f))
@@ -233,8 +238,9 @@
 (defn or-combine [{:keys [validators] :as this} value]
   (let [fail (->ValidationResult :error nil [] value)
         vr (->> validators
-                (mapv #(validate % value))
-                (reduce- or-f fail))]
+                (mapv #(internal-validate % value))
+                (reduce or-f fail)
+                strip-reduced)]
     (if (valid? vr)
       vr
       (let [or-error (assoc (ValidationError. this value)
@@ -255,97 +261,42 @@
     (composite validators or-combine)
     :expected :one-of))
 
+(defn apply-reduced [value f]
+  (if (reduced? value)
+    (reduced (f @value))
+    (f value)))
+
 (defn add-chain [validator {:keys [result] :as vr}]
   (update-in vr [:chain] #(conj (clojure.core/or % [])
                                 {:validator validator
                                  :result result})))
 
-(defn comp-f [{:keys [result chain] :as previous} validator]
-  (let [vr0 (validate validator result)
-        vr (add-chain validator vr0)]
-    (if (valid? vr)
+(defn comp-f [{:keys [result] :as previous} validator]
+  (let [vr0 (internal-validate validator result)
+        vr (apply-reduced vr0 (partial add-chain validator))]
+    (if (clojure.core/or (reduced? vr) (valid? vr))
       vr
       (reduced vr))))
 
 (defn comp-combine [{:keys [validators] :as this} value]
-  (reduce- comp-f
-           (assoc (report-success value)
-             :chain [{:validator this :result value}])
-           (reverse validators)))
+  (->> validators
+       (reduce comp-f
+               (assoc (report-success value)
+                 :chain [{:validator this :result value}]))
+       strip-reduced))
 
-(defn comp [& validators]
+(defn -> [& validators]
   (composite validators comp-combine))
 
-;;; Embedding normal functions in validators
-
-(defn call-fn
-  "Returns a validator that calls f on the input value and
-  then performs validation on the return value of f. If f throws an
-  exception, validation fails. validators are validation functions
-  combined as with 'and'."
-  [f validator]
-  (comp validator (transform f ::fail)))
-
-(defmacro call
-  "Returns a validation that calls the function named by
-  symbol on the input value and then performs validation on the return
-  value of the function. validators are combined as with 'and'."
-  [sym & validators]
-  {:pre [(symbol? sym)]}
-  `(call-fn ~sym (and ~@validators)))
-
-(defmacro keys
-  "Returns a validation that performs validation on the keys
-  of its input, which must be a map."
-  [& validators]
-  `(call clojure.core/keys ~@validators))
-
-(defmacro vals
-  "Returns a validation that performs validation on the values
-  of its input, which must be a map."
-  [& validators]
-  `(call clojure.core/vals ~@validators))
-
-(defmacro count
-  "Returns a validation that performs validation on the result
-  of calling count on its input."
-  [& validators]
-  `(call clojure.core/count ~@validators))
-
-;;; Reaching into associative structures
-
-(defn has
-  "Returns a validator that checks for the presence of keys
-  in a nested associative structure. ks is a sequence of keys."
-  [ks]
-  (assoc (transform ks ::missing) :operation :has))
-
-(defn if-in
-  "Like 'in' but does not return an error if the structure does not
-  contain the given keys."
-  [ks & validators]
-  (comp (or
-         (->EmptyValidator #{:missing :nil :blank})
-         (apply and validators))
-        (transform ks ::never-fail)))
-
-(defn in
-  "Returns a composition of validator functions that operate on a value
-  in nested associative structures. Reaches into the structure as with
-  'get-in' where ks is a sequential collection of keys. Calls the
-  'and'd validators on the value. If any validations fail, returns
-  a map with errors and the keys.
-
-  If the structure does not contain ks, returns an error. See also
-  if-in."
-  [ks & validators]
-  (comp (apply and validators) (has ks)))
+(defn comp [& validators]
+  (apply -> (reverse validators)))
 
 (defn every-validate [validators this input]
-  (reduce- and-all-f (report-success input)
-           (for [v validators
-                 item input]
-             (validate v item))))
+  (->> (for [v validators
+             item input]
+         (validate v item))
+       (reduce and-all-f (report-success input))
+       strip-reduced))
 
 (defn every
   "Returns a validator function that applies the validators to each
@@ -406,7 +357,7 @@
   when (pred input) is true."
   [pred & validators]
   (let [validator (apply and validators)]
-    (to-validator
+    (transform
      (fn when-f [input]
        (if (pred input)
          (validate validator input)
@@ -426,11 +377,9 @@
   (not (clojure.core/or (neg? (compare value min-incl))
                         (pos? (compare value max-incl)))))
 
-(defmacro field-is [field pred & args]
-  (enhance-error (in [field] `(is ~pred ~@args))
-                 #(assoc % :field field)))
-
 ; http://stackoverflow.com/questions/2640169/whats-the-easiest-way-to-parse-numbers-in-clojure
+
+; Don't think core.typed can verify this
 (defn parse-decimal-number [s]
   "Reads a number from a string. Returns nil if not a number."
   [s]
@@ -438,7 +387,7 @@
            (re-find #"^\s*-?\d+\.?\d*([Ee]\+\d+|[Ee]-\d+|[Ee]\d+)?$" s))
     (edn/read-string (s/replace s #"^0+(\d)" "$1"))))
 
-(defn as-decimal-number [s]
+(defn as-number [s]
   (if (number? s) s (parse-decimal-number s)))
 
 ;;; Invocation patterns

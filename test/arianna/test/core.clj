@@ -1,7 +1,8 @@
 (ns arianna.test.core
   (:require [arianna :as v]
+            [arianna.validate :as av]
             [clojure.test :refer :all])
-  (:import [arianna ValidationError]))
+  (:import [arianna ValidationError ValidationResult]))
 
 (def number-validator (v/is number?))
 
@@ -22,8 +23,7 @@
 (def under-10 (v/validator #(< % 10) {:error "must be less than 10"}))
 
 (defn get-errors [validator input]
-  (-> (v/validate validator input)
-      :errors))
+  (:errors (v/validate validator input)))
 
 (deftest u10
   (is (= (:error under-10) "must be less than 10")
@@ -46,6 +46,13 @@
 (def is-float (v/is float?))
 (def is-odd (v/is odd?))
 (def is-even (v/is even?))
+
+(def is-even-optional (v/optional-validator even?))
+
+(deftest optional-tests
+  (is (instance? ValidationResult (v/validate is-even-optional 3)))
+  (is (instance? ValidationResult (v/validate is-even-optional 4)))
+  (is (instance? ValidationResult @(v/internal-validate is-even-optional 4))))
 
 (def odd-integer (v/and is-integer is-odd))
 
@@ -85,33 +92,59 @@
     (is (= e2 (ValidationError. is-float "foo")))))
 
 (deftest to-val
-  (let [v (v/to-validator keys)]
+  (let [v (v/transform keys)]
     (is (= [:a]
            (:result (v/validate v {:a 3}))))))
 
 (def are-string (v/are string?))
+(def simple-map-av
+  (v/and (av/keys (v/are keyword?)) (av/vals are-string)))
 (def simple-map
-  (v/and (v/keys (v/are keyword?)) (v/vals are-string)))
+  (v/and (v/-> keys (v/are keyword?)) (v/-> vals are-string)))
 
-(def up-to-4-elements (v/count (v/validator #(< % 4))) )
+(def up-to-4-elements-av (av/count (v/validator #(< % 4))) )
+(def up-to-4-elements (v/-> count (v/validator #(< % 4))) )
 
 (deftest projection-tests
   (is (= [(ValidationError. are-string 2)
           (get-errors simple-map {:a "one", :b 2})]))
+  (is (= [(ValidationError. are-string 2)
+          (get-errors simple-map-av {:a "one", :b 2})]))
   (is (not (v/valid? [:a :b :c :d] up-to-4-elements)))
-  (is (v/valid? [:a :c :d] up-to-4-elements)))
+  (is (v/valid? [:a :c :d] up-to-4-elements))
+  (is (not (v/valid? [:a :b :c :d] up-to-4-elements-av)))
+  (is (v/valid? [:a :c :d] up-to-4-elements-av)))
 
 (def john {:name "John Doe", :address {:city "Baltimore"}})
 
 (deftest in
-  (is (v/valid? john (v/in [:address :city] (v/is string?)))
-      "City should be valid.")
-  (is (not (v/valid? john (v/in [:address :zip] (v/is string?))))
-      "Missing ZIP should be invalid.")
-  (is (v/valid? john (v/if-in [:address :zip] (v/is string?)))
-      "Missing ZIP should be acceptable with if-in."))
+  (testing "Required"
+    (is (v/valid? "Hello" v/required))
+    (is (v/valid? "Hello" v/optional))
+    (is (not (v/valid? nil v/required)))
+    (is (not (v/valid? "   " v/required))))
+  (testing "Validate compatibility"
+    (is (v/valid? john (av/in [:address :city] (v/is string?)))
+        "City should be valid.")
+    (is (not (v/valid? john (av/in [:address :zip] (v/is string?))))
+        "Missing ZIP should be invalid.")
+    (is (v/valid? john (av/if-in [:address :zip] (v/is string?)))
+        "Missing ZIP should be acceptable with if-in."))
+  (testing "Native syntax"
+    (is (v/valid? john
+                  (v/-> [:address :city] v/required (v/is string?)))
+        "City should be valid when required.")
+    (is (not (v/valid? john
+                       (v/-> [:address :zip]
+                             v/required
+                             (v/is string?))))
+        "Missing ZIP should be required.")
+    (is (v/valid? john (v/-> [:address :zip]
+                             v/optional
+                             (v/is string?)))
+        "Missing ZIP should be acceptable when optional.")))
 
-(def dn (v/as v/as-decimal-number))
+(def dn (v/as v/as-number))
 
 (def key-projection (v/as :name))
 (def key2-projection (v/as [:address :city]))
@@ -125,5 +158,5 @@
   (is (not (v/valid? "H" dn))))
 
 (deftest hastest
-  (is (v/valid? john (v/has [:address :city])))
-  (is (not (v/valid? john (v/has [:address :zip])))))
+  (is (v/valid? john (av/has [:address :city])))
+  (is (not (v/valid? john (av/has [:address :zip])))))
