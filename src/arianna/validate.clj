@@ -53,9 +53,9 @@
   "Like 'in' but does not return an error if the structure does not
   contain the given keys."
   [ks & validators]
-  (a/-> ks
-        a/optional
-        (apply a/and validators)))
+  (a/->> ks
+         a/optional
+         (apply a/and validators)))
 
 (defn in
   "Returns a composition of validator functions that operate on a
@@ -67,4 +67,4 @@
   If the structure does not contain ks, returns an error. See also
   if-in."
   [ks & validators]
-  (a/-> (has ks) (apply a/and validators)))
+  (a/->> (has ks) (apply a/and validators)))

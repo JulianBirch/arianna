@@ -100,10 +100,10 @@
 (def simple-map-av
   (v/and (av/keys (v/are keyword?)) (av/vals are-string)))
 (def simple-map
-  (v/and (v/-> keys (v/are keyword?)) (v/-> vals are-string)))
+  (v/and (v/->> keys (v/are keyword?)) (v/->> vals are-string)))
 
 (def up-to-4-elements-av (av/count (v/validator #(< % 4))) )
-(def up-to-4-elements (v/-> count (v/validator #(< % 4))) )
+(def up-to-4-elements (v/->> count (v/validator #(< % 4))) )
 
 (deftest projection-tests
   (is (= [(ValidationError. are-string 2)
@@ -132,19 +132,19 @@
         "Missing ZIP should be acceptable with if-in."))
   (testing "Native syntax"
     (is (v/valid? john
-                  (v/-> [:address :city] v/required (v/is string?)))
+                  (v/->> [:address :city] v/required (v/is string?)))
         "City should be valid when required.")
     (is (not (v/valid? john
-                       (v/-> [:address :zip]
-                             v/required
-                             (v/is string?))))
+                       (v/->> [:address :zip]
+                              v/required
+                              (v/is string?))))
         "Missing ZIP should be required.")
-    (is (v/valid? john (v/-> [:address :zip]
-                             v/optional
-                             (v/is string?)))
+    (is (v/valid? john (v/->> [:address :zip]
+                              v/optional
+                              (v/is string?)))
         "Missing ZIP should be acceptable when optional.")))
 
-(def dn (v/as v/as-number))
+(def dn (v/as v/number))
 
 (def key-projection (v/as :name))
 (def key2-projection (v/as [:address :city]))
@@ -160,3 +160,19 @@
 (deftest hastest
   (is (v/valid? john (av/has [:address :city])))
   (is (not (v/valid? john (av/has [:address :zip])))))
+
+
+(def comment0 {:email "julian@gmail.com"
+               :comment "Short"
+               :name ""
+               :url "http://xxx/"})
+
+(def bademail {:email "xxx"})
+
+(def email (v/->> :email v/optional (v/is v/email?)))
+
+(deftest email-tests
+  (is (not (v/email? "test@abc")))
+  (is (v/valid? {:email "xjobcon@phx.com"} email))
+  (is (not (v/valid? {:email "test@abc"} email)))
+  (is (v/valid? {:email " "} email)))
