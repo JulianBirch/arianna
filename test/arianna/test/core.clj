@@ -18,9 +18,12 @@
        :errors [(ValidationError. number-validator "hi")]
        :input "hi"})
   (is (v/valid? "Baltimore" (v/is string?))
-      "Baltimore is a string."))
+      "Baltimore is a string.")
+  (is (v/validate (v/is integer?) 4.0)))
 
-(def under-10 (v/validator #(< % 10) {:error "must be less than 10"}))
+(def under-10
+  (assoc (v/is >= 10)
+    :error "must be less than 10"))
 
 (defn get-errors [validator input]
   (:errors (v/validate validator input)))
@@ -47,7 +50,7 @@
 (def is-odd (v/is odd?))
 (def is-even (v/is even?))
 
-(def is-even-optional (v/optional-validator even?))
+(def is-even-optional (v/is-optional even?))
 
 (deftest optional-tests
   (is (instance? ValidationResult (v/validate is-even-optional 3)))
@@ -77,7 +80,6 @@
   (is (not (v/valid? 42 (v/are char?)))))
 ; TODO: Are and every should provide value chain
 ; TODO: Field method :field
-; TODO: Improve optional
 
 (def i-or-f (v/or is-integer is-float))
 
@@ -92,7 +94,7 @@
     (is (= e2 (ValidationError. is-float "foo")))))
 
 (deftest to-val
-  (let [v (v/transform keys)]
+  (let [v (v/as keys)]
     (is (= [:a]
            (:result (v/validate v {:a 3}))))))
 
@@ -100,10 +102,11 @@
 (def simple-map-av
   (v/and (av/keys (v/are keyword?)) (av/vals are-string)))
 (def simple-map
-  (v/and (v/->> keys (v/are keyword?)) (v/->> vals are-string)))
+  (v/and (v/->> (v/as keys) (v/are keyword?))
+         (v/->> (v/as vals) are-string)))
 
-(def up-to-4-elements-av (av/count (v/validator #(< % 4))) )
-(def up-to-4-elements (v/->> count (v/validator #(< % 4))) )
+(def up-to-4-elements-av (av/count (v/is > 4)))
+(def up-to-4-elements (v/->> (v/as count) (v/is > 4)))
 
 (deftest projection-tests
   (is (= [(ValidationError. are-string 2)
@@ -121,6 +124,8 @@
   (testing "Required"
     (is (v/valid? "Hello" v/required))
     (is (v/valid? "Hello" v/optional))
+    (is (v/valid? "" v/optional))
+    (is (v/valid? nil v/optional))
     (is (not (v/valid? nil v/required)))
     (is (not (v/valid? "   " v/required))))
   (testing "Validate compatibility"
@@ -132,14 +137,14 @@
         "Missing ZIP should be acceptable with if-in."))
   (testing "Native syntax"
     (is (v/valid? john
-                  (v/->> [:address :city] v/required (v/is string?)))
+                  (v/->> (v/as [:address :city]) v/required (v/is string?)))
         "City should be valid when required.")
     (is (not (v/valid? john
-                       (v/->> [:address :zip]
+                       (v/->> (v/as [:address :zip])
                               v/required
                               (v/is string?))))
         "Missing ZIP should be required.")
-    (is (v/valid? john (v/->> [:address :zip]
+    (is (v/valid? john (v/->> (v/as [:address :zip])
                               v/optional
                               (v/is string?)))
         "Missing ZIP should be acceptable when optional.")))
@@ -158,9 +163,8 @@
   (is (not (v/valid? "H" dn))))
 
 (deftest hastest
-  (is (v/valid? john (av/has [:address :city])))
-  (is (not (v/valid? john (av/has [:address :zip])))))
-
+  (is (v/valid? john (v/has [:address :city])))
+  (is (not (v/valid? john (v/has [:address :zip])))))
 
 (def comment0 {:email "julian@gmail.com"
                :comment "Short"
@@ -169,7 +173,7 @@
 
 (def bademail {:email "xxx"})
 
-(def email (v/->> :email v/optional (v/is v/email?)))
+(def email (v/->> (v/as :email) v/optional (v/is v/email?)))
 
 (deftest email-tests
   (is (not (v/email? "test@abc")))

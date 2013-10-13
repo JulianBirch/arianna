@@ -6,13 +6,21 @@
 
 ;;; Embedding normal functions in validators
 
+;; This inner-call and transform is pretty ugly.
+(defn inner-call [f value]
+  (f value))
+
+(defn transform [f fail]
+  (assoc (a/as inner-call f)
+    :-fail fail))
+
 (defn call-fn
   "Returns a validator that calls f on the input value and
   then performs validation on the return value of f. If f throws an
   exception, validation fails. validators are validation functions
   combined as with 'and'."
   [f validator]
-  (a/comp validator (a/transform f ::fail)))
+  (a/comp validator (transform f ::fail)))
 
 (defmacro call
   "Returns a validation that calls the function named by
@@ -43,17 +51,11 @@
 
 ;;; Reaching into associative structures
 
-(defn has
-  "Returns a validator that checks for the presence of keys
-  in a nested associative structure. ks is a sequence of keys."
-  [ks]
-  (assoc (a/transform ks :arianna/missing) :operation :has))
-
 (defn if-in
   "Like 'in' but does not return an error if the structure does not
   contain the given keys."
   [ks & validators]
-  (a/->> ks
+  (a/->> (a/as ks)
          a/optional
          (apply a/and validators)))
 
@@ -67,4 +69,4 @@
   If the structure does not contain ks, returns an error. See also
   if-in."
   [ks & validators]
-  (a/->> (has ks) (apply a/and validators)))
+  (a/->> (a/has ks) (apply a/and validators)))

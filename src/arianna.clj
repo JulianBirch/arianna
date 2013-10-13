@@ -3,7 +3,8 @@
   (:import [clojure.lang IPersistentVector ISeq Keyword])
   (:require [clojure.edn :as edn]
             [clojure.string :as s]
-            [spyscope.core]))
+            [spyscope.core]
+            [poppea :refer [document-partial partial-invoke]]))
 
 (def ^:dynamic *enable-protect-exception* true)
 
@@ -11,10 +12,6 @@
 
 ; status is either :ok or :error (:pending may come later)
 (defrecord ValidationResult [status result errors input])
-
-(defprotocol IValidator
-  "Validator abstraction"
-  (validate- [this value] "Evaluates the validator."))
 
 (defn- strip-reduced [v] (if (reduced? v) @v v))
 
@@ -29,13 +26,14 @@
 (defn- add-exception [[error] exception]
   (list (assoc error :exception exception)))
 
-(defn internal-validate [validator value]
+(defn internal-validate [{:keys [-method] :as validator} value]
+  {:pre (symbol? -method)}
   (if *enable-protect-exception*
-      (try (validate- validator value)
+    (try ((find-var -method) validator value)
            (catch Exception exception
              (update-in (report-failure validator value)
                         [:errors] add-exception exception)))
-      (validate- validator value)))
+    ((find-var -method) validator value)))
 
 (defn validate [validator value]
   (strip-reduced (internal-validate validator value)))
@@ -53,67 +51,108 @@
   ([value] (->ValidationResult :ok value nil value))
   ([input result] (->ValidationResult :ok result nil input)))
 
-(defn predicate-validate [{:keys [is-required] :as this}
-                          predicate value]
-  (if is-required
-    (if (predicate value)
+(defn predicate-validate
+  [{:keys [-required?] :as this} result value]
+  (if -required?
+    (if result
       (report-success value)
       (report-failure this value))
     (let [r (report-success value)]
-      (if (predicate value) (reduced r) r))))
+      (if result (reduced r) r))))
 
-(defrecord PredicateValidator [predicate is-required]
-  IValidator
-  (validate- [this value]
-    (predicate-validate this predicate value)))
+(defn is-m [this value]
+  (predicate-validate this
+                      (partial-invoke this value)
+                      value))
 
-(defn to-transform-fn [v default]
-  (clojure.core/cond
-   (vector? v) (fn lookup [input] (get-in input v default))
-   (keyword? v) (fn lookup [input] (get input v default))
-   :else v))
+(defn is-not-m [this value]
+  (predicate-validate this
+                      (not (partial-invoke this value))
+                      value))
 
-(defn assoc-projection [v projection]
-  (if (clojure.core/or (vector? projection) (keyword? projection))
-    (assoc v :projection projection)
-    v))
+(defn as-key-m [{:keys [projection default] :as this} value]
+  (report-success (if (vector? projection)
+                    (get-in value projection default)
+                    (get value projection default))))
 
-(defn to-predicate [v]
-  (if (satisfies? IValidator v)
-    v
-    (-> (to-transform-fn v nil)
-        (->PredicateValidator true)
-        (assoc-projection v))))
-
-(defrecord FnValidator [f]
-  IValidator
-  (validate- [this value] (f this value)))
+(defn has-key-m [{:keys [projection] :as this} value]
+  (let [result (if (vector? projection)
+                 (get-in value projection ::missing)
+                 (get value projection ::missing))]
+    (if (= ::missing result)
+      (report-failure this value)
+      (report-success value result))))
 
 (defn enhance-error [this result]
   (update-in result [:errors]
              (fn [e] (map #(assoc % :validator this) e))))
 
-(defn projection-validation-method [projection fail]
-  (fn [this value]
-    (let [result (projection value)]
-      (if (instance? ValidationResult result)
-        (if (valid? result)
-          result
-          (enhance-error this result))
-        (if (= result fail)
-          (report-failure this value result)
-          (report-success value result))))))
+(defn as-m [this value]
+  (let [result (partial-invoke this value)]
+    (if (instance? ValidationResult result)
+      (if (valid? result)
+        result
+        (enhance-error this result))
+      (if (= result (:-fail this))
+        (report-failure this value result)
+        (report-success value result)))))
 
-(defn transform
-  ([v] (transform v nil))
-  ([v fail]
-     (if (satisfies? IValidator v) v
-         (-> (to-transform-fn v ::missing)
-             (projection-validation-method fail)
-             ->FnValidator
-             (assoc-projection v)))))
+(defn- valid-projection? [proj]
+  (clojure.core/or (symbol? proj)
+                   (keyword? proj)
+                   (vector? proj)))
 
-(defn is-empty [rules value]
+;;; Validator-creating macros
+
+(defmacro is
+  "Returns a validator which will call (pred ~@args input).
+  pred must be a symbol."
+  [pred & args]
+  {:pre [(symbol? pred)]}
+  `(assoc (document-partial ~pred ~@args)
+     :-method 'arianna/is-m
+     :-required? true))
+
+(defmacro is-optional
+  "Returns a validator which will call (pred ~@args input).
+  pred must be a symbol."
+  [pred & args]
+  {:pre [(symbol? pred)]}
+  `(assoc (document-partial ~pred ~@args)
+     :-method 'arianna/is-m
+     :-required? false))
+
+(defmacro is-not
+  "Returns a validator which will call
+  (not (pred ~@args input)). pred must be a symbol."
+  [pred & args]
+  {:pre [(symbol? pred)]}
+  `(assoc (document-partial ~pred ~@args)
+     :-method 'arianna/is-not-m
+     :-required? true))
+
+(defmacro as
+  "Returns a validator which will call a projection.  "
+  [projection & args]
+  {:pre [(valid-projection? projection)]}
+  (if (clojure.core/and (symbol? projection)
+                        (not (keyword? `~projection))
+                        (ifn? `~projection)
+                        (resolve projection))
+    `(assoc (document-partial ~projection ~@args)
+       :-method 'arianna/as-m)
+    `{:-method 'arianna/as-key-m
+      :projection ~projection}))
+
+(defmacro has
+  "Returns a validator which will call (proj ~@args input).
+  proj must be a symbol.  "
+  ([proj]
+     {:pre [(valid-projection? proj)]}
+     `{:-method 'arianna/has-key-m
+       :projection ~proj}))
+
+(defn present? [rules value]
   (clojure.core/or
    (if (contains? rules :missing)
      (= value ::missing))
@@ -124,70 +163,11 @@
     (string? value)
     (s/blank? value))))
 
-(defrecord EmptyValidator [rules is-required]
-  IValidator
-  (validate- [this value]
-    (let [is-empty #(is-empty rules %)
-          is-empty ((if is-required complement identity) is-empty)]
-      (predicate-validate this is-empty value))))
-
-(def optional (EmptyValidator. #{:missing :nil :blank} false))
-(def required (EmptyValidator. #{:missing :nil :blank} true))
-
-(defn- valid-projection? [proj]
-  (clojure.core/or (symbol? proj)
-                   (keyword? proj)
-                   (vector? proj)))
-
-(defn validator
-  ([predicate] (->PredicateValidator predicate true))
-  ([predicate expected]
-     (merge (validator predicate) expected)))
-
-(defn optional-validator
-  ([predicate] (->PredicateValidator predicate false))
-  ([predicate expected]
-     (merge (validator predicate) expected)))
-
-;;; Validator-creating macros
-
-(defmacro is
-  "Returns a validator function which will call (pred ~@args input).
-  pred must be a symbol."
-  ([pred]
-     {:pre [(symbol? pred)]}
-     `(validator ~pred {:expected '~&form}))
-  ([pred & args]
-     {:pre [(symbol? pred)]}
-     `(validator (partial ~pred ~@args) {:expected '~&form})))
-
-(defmacro is-not
-  "Returns a validator function which will call
-  (not (pred ~@args input)). pred must be a symbol."
-  ([pred]
-     {:pre [(symbol? pred)]}
-     `(validator (complement ~pred) {:expected '~&form}))
-  ([pred & args]
-     {:pre [(symbol? pred)]}
-     `(validator (complement (partial ~pred ~@args))
-                 {:expected '~&form})))
+(def all-empty-rules #{:missing :nil :blank})
+(def optional (is-optional present? all-empty-rules))
+(def required (is-not present? all-empty-rules))
 
 ;;; Validator combinators
-
-(defrecord CompositeValidator [validators combine]
-  IValidator
-  (validate- [this value] (combine this value)))
-
-(defmacro as
-  "Returns a validator which will call (proj ~@args input).
-  proj must be a symbol.  "
-  ([proj]
-     {:pre [(valid-projection? proj)]}
-     `(assoc (transform ~proj) :projection '~&form))
-  ([proj & args]
-     {:pre [(valid-projection? proj)]}
-     `(assoc (transform (partial ~proj ~@args))
-        :projection '~&form)))
 
 (defn- single
   ([list default]
@@ -196,11 +176,12 @@
        default))
   ([list] (single list nil)))
 
-(defn composite [validators interpret combine]
+(defn composite [validators combine]
+  { :pre [(symbol? combine)]}
   (if-let [v (single validators)]
-    (interpret v)
-    (->CompositeValidator (mapv interpret validators)
-                          combine)))
+    v
+    {:validators validators
+     :-method combine}))
 
 (defn merge-errors [previous current]
   (if (valid? previous)
@@ -233,7 +214,7 @@
   and calls all the given validators on it. If all the validators
   pass, it returns nil, otherwise it returns a sequence of errors."
   [& validators]
-  (composite validators to-predicate and-all-combine))
+  (composite validators 'arianna/and-all-combine))
 
 (defn and
   "Returns the conjunction of validator functions. The returned
@@ -242,7 +223,7 @@
   validation fails, short-circuits and returns a sequence of errors,
   does not run the remaining validations."
   [& validators]
-  (composite validators to-predicate and-combine))
+  (composite validators 'arianna/and-combine))
 
 (defn or-f [previous current]
   (if (valid? current)
@@ -271,9 +252,7 @@
   short-circuits and returns nil. If all validations fail, returns a
   sequence of errors."
   [& validators]
-  (assoc
-    (composite validators to-predicate or-combine)
-    :expected :one-of))
+  (composite validators 'arianna/or-combine))
 
 (defn apply-reduced [value f]
   (if (reduced? value)
@@ -292,7 +271,7 @@
       vr
       (reduced vr))))
 
-(defn comp-combine [{:keys [validators] :as this} value]
+(defn thread [{:keys [validators] :as this} value]
   (clojure.core/->>
    validators
    (reduce comp-f
@@ -301,7 +280,7 @@
    strip-reduced))
 
 (defn ->> [& validators]
-  (composite validators transform comp-combine))
+  (composite validators 'arianna/thread))
 
 (defn comp [& validators]
   (apply ->> (reverse validators)))
@@ -313,44 +292,39 @@
                     (reduce and-all-f (report-success input))
                     strip-reduced))
 
+(defn every-m [{:keys [validators] :as this} value]
+  (every-validate validators this value))
+
 (defn every
   "Returns a validator function that applies the validators to each
   element of the input collection."
   [& validators]
-  (assoc (->FnValidator
-          #(every-validate validators %1 %2))
-    :operator :every))
+  {:validators validators :-method 'arianna/every-m})
 
-(defn are-validate-fn [pred this input]
-  (let [r (filterv (complement pred) input)]
+
+(defn are-m [this input]
+  (let [r (filterv #(not (partial-invoke this %)) input)]
     (if (empty? r)
       (report-success this input)
-      (->ValidationResult :error input
+      (->ValidationResult :error
+                          input
                           (mapv #(ValidationError. this %) r)
                           input))))
-(defn are-validator
-  ([predicate] (->FnValidator
-                #(are-validate-fn predicate %1 %2)))
-  ([predicate expected]
-     (merge (are-validator predicate) expected)))
 
 (defmacro are
-  "Returns a validator function which will call (pred ~@args input)
-  on each element of an input collection. pred must be a symbol."
-  ([pred]
-     {:pre [(symbol? pred)]}
-     `(are-validator ~pred
-                     {:expected '~&form}))
+  "Returns a validator which will call (pred ~@args input).
+  pred must be a symbol."
   ([pred & args]
      {:pre [(symbol? pred)]}
-     `(are-validator (partial ~pred ~@args)
-                     {:expected '~&form})))
+     `(assoc (document-partial ~pred ~@args)
+        :-method 'arianna/are-m
+        :-required? true)))
 
 (defn clause-matches [input [pred _]]
   (or (= pred :else)
       (valid? (validate pred input))))
 
-(defn cond
+#_(defn cond
   "Returns a validator function that checks multiple conditions. Each
   clause is a pair of a predicate and a validator. Optional last
   argument is a validator to run if none of the predicates returns
@@ -369,7 +343,7 @@
          (validate (second clause) input)
          (report-failure this input))))))
 
-(defn when
+#_(defn when
   "Returns a validator function that only checks the validators
   when (pred input) is true."
   [pred & validators]
