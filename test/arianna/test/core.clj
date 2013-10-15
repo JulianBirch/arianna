@@ -107,6 +107,7 @@
 
 (def up-to-4-elements-av (av/count (v/is > 4)))
 (def up-to-4-elements (v/->> (v/as count) (v/is > 4)))
+(def up-to-4-elements-% (v/->> (v/as count) (v/is < % 4)))
 
 (deftest projection-tests
   (is (= [(ValidationError. are-string 2)
@@ -115,6 +116,8 @@
           (get-errors simple-map-av {:a "one", :b 2})]))
   (is (not (v/valid? [:a :b :c :d] up-to-4-elements)))
   (is (v/valid? [:a :c :d] up-to-4-elements))
+  (is (not (v/valid? [:a :b :c :d] up-to-4-elements-%)))
+  (is (v/valid? [:a :c :d] up-to-4-elements-%))
   (is (not (v/valid? [:a :b :c :d] up-to-4-elements-av)))
   (is (v/valid? [:a :c :d] up-to-4-elements-av)))
 

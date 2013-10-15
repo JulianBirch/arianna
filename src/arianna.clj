@@ -4,7 +4,7 @@
   (:require [clojure.edn :as edn]
             [clojure.string :as s]
             [spyscope.core]
-            [poppea :refer [document-partial partial-invoke]]))
+            [poppea :refer [document-partial-% partial-invoke-%]]))
 
 (def ^:dynamic *enable-protect-exception* true)
 
@@ -62,12 +62,12 @@
 
 (defn is-m [this value]
   (predicate-validate this
-                      (partial-invoke this value)
+                      (partial-invoke-% this value)
                       value))
 
 (defn is-not-m [this value]
   (predicate-validate this
-                      (not (partial-invoke this value))
+                      (not (partial-invoke-% this value))
                       value))
 
 (defn as-key-m [{:keys [projection default] :as this} value]
@@ -88,7 +88,7 @@
              (fn [e] (map #(assoc % :validator this) e))))
 
 (defn as-m [this value]
-  (let [result (partial-invoke this value)]
+  (let [result (partial-invoke-% this value)]
     (if (instance? ValidationResult result)
       (if (valid? result)
         result
@@ -109,7 +109,7 @@
   pred must be a symbol."
   [pred & args]
   {:pre [(symbol? pred)]}
-  `(assoc (document-partial ~pred ~@args)
+  `(assoc (document-partial-% ~pred ~@args)
      :-method 'arianna/is-m
      :-required? true))
 
@@ -118,7 +118,7 @@
   pred must be a symbol."
   [pred & args]
   {:pre [(symbol? pred)]}
-  `(assoc (document-partial ~pred ~@args)
+  `(assoc (document-partial-% ~pred ~@args)
      :-method 'arianna/is-m
      :-required? false))
 
@@ -127,7 +127,7 @@
   (not (pred ~@args input)). pred must be a symbol."
   [pred & args]
   {:pre [(symbol? pred)]}
-  `(assoc (document-partial ~pred ~@args)
+  `(assoc (document-partial-% ~pred ~@args)
      :-method 'arianna/is-not-m
      :-required? true))
 
@@ -139,7 +139,7 @@
                         (not (keyword? `~projection))
                         (ifn? `~projection)
                         (resolve projection))
-    `(assoc (document-partial ~projection ~@args)
+    `(assoc (document-partial-% ~projection ~@args)
        :-method 'arianna/as-m)
     `{:-method 'arianna/as-key-m
       :projection ~projection}))
@@ -299,11 +299,11 @@
   "Returns a validator function that applies the validators to each
   element of the input collection."
   [& validators]
-  {:validators validators :-method 'arianna/every-m})
-
+  {:validators validators
+   :-method 'arianna/every-m})
 
 (defn are-m [this input]
-  (let [r (filterv #(not (partial-invoke this %)) input)]
+  (let [r (filterv #(not (partial-invoke-% this %)) input)]
     (if (empty? r)
       (report-success this input)
       (->ValidationResult :error
@@ -316,7 +316,7 @@
   pred must be a symbol."
   ([pred & args]
      {:pre [(symbol? pred)]}
-     `(assoc (document-partial ~pred ~@args)
+     `(assoc (document-partial-% ~pred ~@args)
         :-method 'arianna/are-m
         :-required? true)))
 
