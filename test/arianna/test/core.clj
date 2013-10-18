@@ -35,7 +35,8 @@
              first
              :validator
              :error) "must be less than 10")
-      "Should be possible to extract out provided error."))
+      "Should be possible to extract out provided error.")
+  (is (v/valid? 42 (v/is > % 10))))
 
 (deftest assert-valid-
   (is (thrown? java.lang.Exception
@@ -98,22 +99,40 @@
     (is (= [:a]
            (:result (v/validate v {:a 3}))))))
 
+(deftest composite-syntax
+  (is (v/valid? 42 (v/->> (> % 10))))
+  (is (v/valid? 42 (v/->> even? (> % 10))))
+  (is (not (v/valid? 15 (v/and even? (> % 10)))))
+  (is (not (v/valid? 8 (v/and even? (> % 10))))))
+
 (def are-string (v/are string?))
 (def simple-map-av
   (v/and (av/keys (v/are keyword?)) (av/vals are-string)))
-(def simple-map
+(def simple-map-explicit
   (v/and (v/->> (v/as keys) (v/are keyword?))
          (v/->> (v/as vals) are-string)))
+(def simple-map
+  (v/and (v/->> keys (v/are keyword?))
+         (v/->> vals (v/are string?))))
+
+(deftest referential-equality
+  (is (= (v/is string?) (v/is string?))
+      "You can test validators for equality.")
+  (is (= (v/->> (v/as * 2) (v/is even?))
+         (v/comp (v/is even?) (v/as * 2)))
+      "Comp and thread are the same with their arguments reversed."))
 
 (def up-to-4-elements-av (av/count (v/is > 4)))
 (def up-to-4-elements (v/->> (v/as count) (v/is > 4)))
-(def up-to-4-elements-% (v/->> (v/as count) (v/is < % 4)))
+(def up-to-4-elements-% (v/->> count (< % 4)))
 
 (deftest projection-tests
   (is (= [(ValidationError. are-string 2)
           (get-errors simple-map {:a "one", :b 2})]))
   (is (= [(ValidationError. are-string 2)
           (get-errors simple-map-av {:a "one", :b 2})]))
+  (is (= [(ValidationError. (v/are string?) 2)
+          (get-errors simple-map-explicit {:a "one", :b 2})]))
   (is (not (v/valid? [:a :b :c :d] up-to-4-elements)))
   (is (v/valid? [:a :c :d] up-to-4-elements))
   (is (not (v/valid? [:a :b :c :d] up-to-4-elements-%)))
@@ -150,6 +169,19 @@
     (is (v/valid? john (v/->> (v/as [:address :zip])
                               v/optional
                               (v/is string?)))
+        "Missing ZIP should be acceptable when optional."))
+  (testing "Idiomatic syntax"
+    (is (v/valid? john
+                  (v/->> [:address :city] v/required string?))
+        "City should be valid when required.")
+    (is (not (v/valid? john
+                       (v/->> [:address :zip]
+                              v/required
+                              string?)))
+        "Missing ZIP should be required.")
+    (is (v/valid? john (v/->> [:address :zip]
+                              v/optional
+                              string?))
         "Missing ZIP should be acceptable when optional.")))
 
 (def dn (v/as v/number))
@@ -183,3 +215,5 @@
   (is (v/valid? {:email "xjobcon@phx.com"} email))
   (is (not (v/valid? {:email "test@abc"} email)))
   (is (v/valid? {:email " "} email)))
+
+;;; Write tests for comp, cond and when

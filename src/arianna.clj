@@ -104,7 +104,7 @@
 
 ;;; Validator-creating macros
 
-(defmacro is
+(defmacro ^:validator is
   "Returns a validator which will call (pred ~@args input).
   pred must be a symbol."
   [pred & args]
@@ -113,7 +113,7 @@
      :-method 'arianna/is-m
      :-required? true))
 
-(defmacro is-optional
+(defmacro ^:validator is-optional
   "Returns a validator which will call (pred ~@args input).
   pred must be a symbol."
   [pred & args]
@@ -122,7 +122,7 @@
      :-method 'arianna/is-m
      :-required? false))
 
-(defmacro is-not
+(defmacro ^:validator is-not
   "Returns a validator which will call
   (not (pred ~@args input)). pred must be a symbol."
   [pred & args]
@@ -131,7 +131,7 @@
      :-method 'arianna/is-not-m
      :-required? true))
 
-(defmacro as
+(defmacro ^:validator as
   "Returns a validator which will call a projection.  "
   [projection & args]
   {:pre [(valid-projection? projection)]}
@@ -144,7 +144,7 @@
     `{:-method 'arianna/as-key-m
       :projection ~projection}))
 
-(defmacro has
+(defmacro ^:validator has
   "Returns a validator which will call (proj ~@args input).
   proj must be a symbol.  "
   ([proj]
@@ -176,13 +176,6 @@
        default))
   ([list] (single list nil)))
 
-(defn composite [validators combine]
-  { :pre [(symbol? combine)]}
-  (if-let [v (single validators)]
-    v
-    {:validators validators
-     :-method combine}))
-
 (defn merge-errors [previous current]
   (if (valid? previous)
     current
@@ -209,21 +202,76 @@
 (def and-combine (make-and-combine and-f))
 (def and-all-combine (make-and-combine and-all-f))
 
-(defn and-all
+(defn enhancable? [s]
+  (if (symbol? s)
+    (if-let [r (resolve s)]
+      (if (-> r meta :validator not)
+        (fn? @r)))
+    (fn? s)))
+
+(defmacro interpret-is-2 [v]
+  (let [f (first v)]
+    (if (enhancable? f)
+      `(is ~@v))))
+
+(defmacro interpret-is [v]
+  (clojure.core/or
+   (let [v (if (seq? v) v [v])
+         f (first v)]
+     (if (enhancable? f)
+       `(is ~@v)))
+   v))
+
+(defn ends-with? [^String s ^String x]
+  (.endsWith s x))
+
+(def predicate-operators #{"<" "<=" "=" "==" ">=" ">"})
+
+(defn predicate-symbol? [f]
+  (clojure.core/or
+   (predicate-operators (name f))
+   (ends-with? (name f) "?")) )
+
+(defmacro interpret-as [v]
+  (clojure.core/or
+   (clojure.core/cond (vector? v) `(as ~v)
+                      (keyword? v) `(as ~v)
+                      :else (let [v (if (seq? v) v (list v))
+                                  f (first v)]
+                              (if (enhancable? f)
+                                (if (predicate-symbol? f)
+                                  `(is ~@v)
+                                  `(as ~@v)))))
+   v))
+
+(defmacro composite-multiple [validators interpret combine]
+  {:pre [(symbol? combine)]}
+  (let [vs (map (fn [v] `(~interpret ~v)) validators)
+        vs (cons 'list vs)
+        s (str combine)]
+    `{:validators ~vs
+      :-method (symbol ~s)}))
+
+(defmacro composite [validators interpret combine]
+  (if-let [v (single validators)]
+    `(~interpret ~v)
+    `(composite-multiple ~validators ~interpret ~combine)))
+
+(defmacro ^:validator and-all
   "Returns a single validator function which takes a single argument
   and calls all the given validators on it. If all the validators
   pass, it returns nil, otherwise it returns a sequence of errors."
   [& validators]
-  (composite validators 'arianna/and-all-combine))
+  `(composite ~validators interpret-is arianna/and-all-combine))
 
-(defn and
+(defmacro ^:validator and
   "Returns the conjunction of validator functions. The returned
   function takes a single argument and calls all the validator
   functions on it. If all the validations pass, it returns nil. If any
   validation fails, short-circuits and returns a sequence of errors,
   does not run the remaining validations."
   [& validators]
-  (composite validators 'arianna/and-combine))
+  `(composite ~validators interpret-is arianna/and-combine))
 
 (defn or-f [previous current]
   (if (valid? current)
@@ -245,14 +293,14 @@
                             (list or-error)
                             value)))))
 
-(defn or
+(defmacro ^:validator? or
   "Returns the disjunction of validator functions. The returned
   function takes a single argument and calls all the validator
   functions on it. If at least one of the validations pass, it
   short-circuits and returns nil. If all validations fail, returns a
   sequence of errors."
   [& validators]
-  (composite validators 'arianna/or-combine))
+  `(composite ~validators interpret-is arianna/or-combine))
 
 (defn apply-reduced [value f]
   (if (reduced? value)
@@ -279,11 +327,12 @@
              :chain [{:validator this :result value}]))
    strip-reduced))
 
-(defn ->> [& validators]
-  (composite validators 'arianna/thread))
+(defmacro ^:validator ->> [& validators]
+  `(composite ~validators interpret-as arianna/thread))
 
-(defn comp [& validators]
-  (apply ->> (reverse validators)))
+(defmacro ^:validator comp [& validators]
+  `(let [v# (->> ~@validators)]
+     (update-in v# [:validators] reverse)))
 
 (defn every-validate [validators this input]
   (clojure.core/->> (for [v validators
@@ -295,12 +344,11 @@
 (defn every-m [{:keys [validators] :as this} value]
   (every-validate validators this value))
 
-(defn every
+(defmacro ^:validator every
   "Returns a validator function that applies the validators to each
   element of the input collection."
   [& validators]
-  {:validators validators
-   :-method 'arianna/every-m})
+  `(composite-multiple ~validators interpret-is arianna/every-m))
 
 (defn are-m [this input]
   (let [r (filterv #(not (partial-invoke-% this %)) input)]
@@ -311,16 +359,17 @@
                           (mapv #(ValidationError. this %) r)
                           input))))
 
-(defmacro are
+(defmacro ^:validator are
   "Returns a validator which will call (pred ~@args input).
   pred must be a symbol."
   ([pred & args]
      {:pre [(symbol? pred)]}
-     `(assoc (document-partial-% ~pred ~@args)
-        :-method 'arianna/are-m
-        :-required? true)))
+     ^:validator `(assoc (document-partial-% ~pred ~@args)
+                    :-method 'arianna/are-m
+                    :-required? true)))
 
-(defn clause-matches [input [pred _]]
+
+#_(defn clause-matches2 [input [pred _]]
   (or (= pred :else)
       (valid? (validate pred input))))
 

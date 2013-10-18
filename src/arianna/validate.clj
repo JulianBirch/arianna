@@ -10,7 +10,7 @@
 (defn inner-call [f value]
   (f value))
 
-(defn transform [f fail]
+(defn ^:validator transform [f fail]
   (assoc (a/as inner-call f)
     :-fail fail))
 
@@ -29,7 +29,7 @@
   with 'and'."
   [sym & validators]
   {:pre [(symbol? sym)]}
-  `(call-fn ~sym (and ~@validators)))
+  `(call-fn ~sym (arianna/and ~@validators)))
 
 (defmacro keys
   "Returns a validation that performs validation on the keys
@@ -51,15 +51,15 @@
 
 ;;; Reaching into associative structures
 
-(defn if-in
+(defmacro ^:validator if-in
   "Like 'in' but does not return an error if the structure does not
   contain the given keys."
   [ks & validators]
-  (a/->> (a/as ks)
-         a/optional
-         (apply a/and validators)))
+  `(a/->> (a/as ~ks)
+          a/optional
+          (a/and ~@validators)))
 
-(defn in
+(defmacro ^:validator in
   "Returns a composition of validator functions that operate on a
   value in nested associative structures. Reaches into the
   structure as with 'get-in' where ks is a sequential collection
@@ -69,4 +69,4 @@
   If the structure does not contain ks, returns an error. See also
   if-in."
   [ks & validators]
-  (a/->> (a/has ks) (apply a/and validators)))
+  `(a/->> (a/has ~ks) (a/and ~@validators)))
