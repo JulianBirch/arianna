@@ -4,7 +4,8 @@
   (:require [clojure.edn :as edn]
             [clojure.string :as s]
             [spyscope.core]
-            [poppea :refer [document-partial-% partial-invoke-%]]))
+            [poppea :refer [document-partial-% partial-invoke-%
+                            defn-curried]]))
 
 (def ^:dynamic *enable-protect-exception* true)
 
@@ -192,12 +193,11 @@
     current
     (reduced current)))
 
-(defn make-and-combine [f]
-  (fn and-combine [{:keys [validators]} value]
-    (clojure.core/->> validators
-                      (map #(internal-validate % value))
-                      (reduce f (report-success value))
-                      strip-reduced)))
+(defn-curried make-and-combine [f {:keys [validators]} value]
+  (clojure.core/->> validators
+                    (map #(internal-validate % value))
+                    (reduce f (report-success value))
+                    strip-reduced))
 
 (def and-combine (make-and-combine and-f))
 (def and-all-combine (make-and-combine and-all-f))
@@ -369,39 +369,48 @@
                     :-required? true)))
 
 
-#_(defn clause-matches2 [input [pred _]]
-  (or (= pred :else)
-      (valid? (validate pred input))))
+(defn always-true-f [this input] (report-success input))
 
-#_(defn cond
+(def always-true {:-method `always-true-f})
+
+(defn to-match-clause [[pred then]]
+  [(if (= pred :else)
+     `always-true
+     `(interpret-is ~pred))
+   `(interpret-as ~then)])
+
+(defn-curried valid-clause [input clause]
+  (valid? input (first clause)))
+
+(defn cond-f [{:keys [clauses] :as this} input]
+  (if-let [clause
+           (first (filter (valid-clause input) clauses))]
+    (validate (second clause) input)
+    (report-failure this input)))
+
+(defmacro ^:validator cond
   "Returns a validator function that checks multiple conditions. Each
-  clause is a pair of a predicate and a validator. Optional last
-  argument is a validator to run if none of the predicates returns
-  true; otherwise the validation fails."
+  clause is a pair of a predicate and a validator.  Like cond, you
+  can put :else as the last predicate.  If you fail a clause, you
+  get back that claus's validator as a failure.  If no clauses match
+  you get back the root clause."
   [& clauses]
-  (let [clauses (-> clauses
-                    (partition 2)
-                    (map (juxt to-predicate transform)))]
-    (->FnValidator
-     (fn [this input]
-       (if-let
-           [clause
-            (clojure.core/->> clauses
-                              (filter (partial clause-matches input))
-                              first)]
-         (validate (second clause) input)
-         (report-failure this input))))))
+  (let [validators (map to-match-clause (partition 2 clauses))]
+    `{:clauses (list ~@validators)
+      :-method 'cond-f}))
 
-#_(defn when
-  "Returns a validator function that only checks the validators
-  when (pred input) is true."
+(defn when-f [{:keys [pred then]} input]
+  (if (valid? input pred)
+    (validate then input)
+    (report-success input)))
+
+(defmacro ^:validator when
+  "Returns a validator that only checks the validators
+  when pred validates."
   [pred & validators]
-  (let [validator (apply and validators)]
-    (transform
-     (fn when-f [input]
-       (if (pred input)
-         (validate validator input)
-         (report-success input))))))
+  `{:then (and ~@validators)
+    :-method 'when-f
+    :pred (interpret-is ~pred)})
 
 ;;; Validation functions
 

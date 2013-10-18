@@ -217,3 +217,27 @@
   (is (v/valid? {:email " "} email)))
 
 ;;; Write tests for comp, cond and when
+
+(deftest when-test
+  (let [w (v/when string? (= "Hello"))]
+    (is (v/valid? "Hello" w))
+    (is (not (v/valid? "World" w)))
+    (is (v/valid? 3 w))))
+
+(deftest cond-test
+  (let [c (v/cond string? (= "Hello")
+                  integer? (= 3)
+                  :else nil?)
+        missing-clause (v/cond string? (= "Hello"))]
+    (is (v/valid? "Hello" c))
+    (is (not (v/valid? "World" c)))
+    (is (v/valid? 3 c))
+    (is (not (v/valid? 4 c)))
+    (is (v/valid? nil c))
+    (is (not (v/valid? 4.0 c)))
+    (is (v/valid? "Hello" missing-clause))
+    (is (not (v/valid? "World" missing-clause)))
+    (let [vr (v/validate missing-clause 3)]
+      (is (not (v/valid? vr)))
+      (is (= missing-clause
+             (-> vr :errors first :validator))))))
