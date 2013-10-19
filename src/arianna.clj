@@ -1,108 +1,33 @@
 (ns arianna
   (:refer-clojure :exclude [and comp cond or when ->>])
   (:import [clojure.lang IPersistentVector ISeq Keyword])
-  (:require [clojure.edn :as edn]
-            [clojure.string :as s]
+  (:require [arianna.runtime :as r]
+            [arianna.methods]
             [spyscope.core]
             [poppea :refer [document-partial-% partial-invoke-%
-                            defn-curried]]))
+                            defn-curried]]
+            [potemkin]))
 
-(def ^:dynamic *enable-protect-exception* true)
+(potemkin/import-vars
+ [arianna.runtime
 
-(defrecord ValidationError [validator value])
-
-; status is either :ok or :error (:pending may come later)
-(defrecord ValidationResult [status result errors input])
-
-(defn- strip-reduced [v] (if (reduced? v) @v v))
-
-(defn report-failure
-  ([value] (report-failure nil value value))
-  ([this value] (report-failure this value value))
-  ([this input result]
-     (->ValidationResult :error result
-                         (list (ValidationError. this input))
-                         input)))
-
-(defn- add-exception [[error] exception]
-  (list (assoc error :exception exception)))
-
-(defn internal-validate [{:keys [-method] :as validator} value]
-  {:pre (symbol? -method)}
-  (if *enable-protect-exception*
-    (try ((find-var -method) validator value)
-           (catch Exception exception
-             (update-in (report-failure validator value)
-                        [:errors] add-exception exception)))
-    ((find-var -method) validator value)))
-
-(defn validate [validator value]
-  (strip-reduced (internal-validate validator value)))
-
-(defn validate-debug [validator value]
-  (binding [*enable-protect-exception* false]
-    (validate validator value)))
-
-(defn valid?
-  "Returns true if value passes the validator."
-  ([{:keys [status]}] (= :ok status))
-  ([value validator] (valid? (validate validator value))))
-
-(defn report-success
-  ([value] (->ValidationResult :ok value nil value))
-  ([input result] (->ValidationResult :ok result nil input)))
-
-(defn predicate-validate
-  [{:keys [-required?] :as this} result value]
-  (if -required?
-    (if result
-      (report-success value)
-      (report-failure this value))
-    (let [r (report-success value)]
-      (if result (reduced r) r))))
-
-(defn is-m [this value]
-  (predicate-validate this
-                      (partial-invoke-% this value)
-                      value))
-
-(defn is-not-m [this value]
-  (predicate-validate this
-                      (not (partial-invoke-% this value))
-                      value))
-
-(defn as-key-m [{:keys [projection default] :as this} value]
-  (report-success (if (vector? projection)
-                    (get-in value projection default)
-                    (get value projection default))))
-
-(defn has-key-m [{:keys [projection] :as this} value]
-  (let [result (if (vector? projection)
-                 (get-in value projection ::missing)
-                 (get value projection ::missing))]
-    (if (= ::missing result)
-      (report-failure this value)
-      (report-success value result))))
-
-(defn enhance-error [this result]
-  (update-in result [:errors]
-             (fn [e] (map #(assoc % :validator this) e))))
-
-(defn as-m [this value]
-  (let [result (partial-invoke-% this value)]
-    (if (instance? ValidationResult result)
-      (if (valid? result)
-        result
-        (enhance-error this result))
-      (if (= result (:-fail this))
-        (report-failure this value result)
-        (report-success value result)))))
+  validate
+  validate-debug
+  valid?]
+ [arianna.methods
+  present?
+  all-empty-rules
+  in-range?
+  within?
+  matches-regex?
+  email?
+  parse-decimal-number
+  number])
 
 (defn- valid-projection? [proj]
   (clojure.core/or (symbol? proj)
                    (keyword? proj)
                    (vector? proj)))
-
 ;;; Validator-creating macros
 
 (defmacro ^:validator is
@@ -111,8 +36,7 @@
   [pred & args]
   {:pre [(symbol? pred)]}
   `(assoc (document-partial-% ~pred ~@args)
-     :-method 'arianna/is-m
-     :-required? true))
+     :-method `r/is))
 
 (defmacro ^:validator is-optional
   "Returns a validator which will call (pred ~@args input).
@@ -120,8 +44,7 @@
   [pred & args]
   {:pre [(symbol? pred)]}
   `(assoc (document-partial-% ~pred ~@args)
-     :-method 'arianna/is-m
-     :-required? false))
+     :-method `r/is-optional))
 
 (defmacro ^:validator is-not
   "Returns a validator which will call
@@ -129,8 +52,7 @@
   [pred & args]
   {:pre [(symbol? pred)]}
   `(assoc (document-partial-% ~pred ~@args)
-     :-method 'arianna/is-not-m
-     :-required? true))
+     :-method `r/is-not))
 
 (defmacro ^:validator as
   "Returns a validator which will call a projection.  "
@@ -141,78 +63,30 @@
                         (ifn? `~projection)
                         (resolve projection))
     `(assoc (document-partial-% ~projection ~@args)
-       :-method 'arianna/as-m)
-    `{:-method 'arianna/as-key-m
+       :-method `r/as)
+    `{:-method `r/as-key
       :projection ~projection}))
 
+;;; TODO: interpret-is should support has
 (defmacro ^:validator has
   "Returns a validator which will call (proj ~@args input).
   proj must be a symbol.  "
   ([proj]
      {:pre [(valid-projection? proj)]}
-     `{:-method 'arianna/has-key-m
+     `{:-method `r/has-key
        :projection ~proj}))
 
-(defn present? [rules value]
-  (clojure.core/or
-   (if (contains? rules :missing)
-     (= value ::missing))
-   (if (contains? rules :nil)
-     (nil? value))
-   (clojure.core/and
-    (contains? rules :blank)
-    (string? value)
-    (s/blank? value))))
-
-(def all-empty-rules #{:missing :nil :blank})
 (def optional (is-optional present? all-empty-rules))
 (def required (is-not present? all-empty-rules))
 
-;;; Validator combinators
+;;; interpreting things as is or as
 
-(defn- single
-  ([list default]
-     (if (nil? (next list))
-       (first list)
-       default))
-  ([list] (single list nil)))
-
-(defn merge-errors [previous current]
-  (if (valid? previous)
-    current
-    (update-in current [:errors]
-               (partial concat (:errors previous)))))
-
-(defn and-all-f [previous current]
-  (if (valid? current)
-    previous
-    (merge-errors previous current)))
-
-(defn and-f [previous current]
-  (if (valid? current)
-    current
-    (reduced current)))
-
-(defn-curried make-and-combine [f {:keys [validators]} value]
-  (clojure.core/->> validators
-                    (map #(internal-validate % value))
-                    (reduce f (report-success value))
-                    strip-reduced))
-
-(def and-combine (make-and-combine and-f))
-(def and-all-combine (make-and-combine and-all-f))
-
-(defn enhancable? [s]
+(defn- enhancable? [s]
   (if (symbol? s)
     (if-let [r (resolve s)]
       (if (-> r meta :validator not)
         (fn? @r)))
     (fn? s)))
-
-(defmacro interpret-is-2 [v]
-  (let [f (first v)]
-    (if (enhancable? f)
-      `(is ~@v))))
 
 (defmacro interpret-is [v]
   (clojure.core/or
@@ -222,15 +96,16 @@
        `(is ~@v)))
    v))
 
-(defn ends-with? [^String s ^String x]
+(defn- ends-with? [^String s ^String x]
   (.endsWith s x))
 
 (def predicate-operators #{"<" "<=" "=" "==" ">=" ">"})
 
 (defn predicate-symbol? [f]
-  (clojure.core/or
-   (predicate-operators (name f))
-   (ends-with? (name f) "?")) )
+  (let [n (name f)]
+    (clojure.core/or
+     (predicate-operators n)
+     (ends-with? n "?"))) )
 
 (defmacro interpret-as [v]
   (clojure.core/or
@@ -243,6 +118,15 @@
                                   `(is ~@v)
                                   `(as ~@v)))))
    v))
+
+;;; composites
+
+(defn- single
+  ([list default]
+     (if (nil? (next list))
+       (first list)
+       default))
+  ([list] (single list nil)))
 
 (defmacro composite-multiple [validators interpret combine]
   {:pre [(symbol? combine)]}
@@ -262,36 +146,16 @@
   and calls all the given validators on it. If all the validators
   pass, it returns nil, otherwise it returns a sequence of errors."
   [& validators]
-  `(composite ~validators interpret-is arianna/and-all-combine))
+  `(composite ~validators interpret-is r/and-all))
 
 (defmacro ^:validator and
   "Returns the conjunction of validator functions. The returned
   function takes a single argument and calls all the validator
-  functions on it. If all the validations pass, it returns nil. If any
-  validation fails, short-circuits and returns a sequence of errors,
-  does not run the remaining validations."
+  functions on it. If all the validations pass, it returns nil.
+  If any validation fails, short-circuits and returns a sequence
+  of errors, does not run the remaining validations."
   [& validators]
-  `(composite ~validators interpret-is arianna/and-combine))
-
-(defn or-f [previous current]
-  (if (valid? current)
-    (reduced current)
-    (merge-errors previous current)))
-
-(defn or-combine [{:keys [validators] :as this} value]
-  (let [fail (->ValidationResult :error nil [] value)
-        vr (clojure.core/->> validators
-                             (mapv #(internal-validate % value))
-                             (reduce or-f fail)
-                             strip-reduced)]
-    (if (valid? vr)
-      vr
-      (let [or-error (assoc (ValidationError. this value)
-                       :errors (:errors vr))]
-        (->ValidationResult :error
-                            value
-                            (list or-error)
-                            value)))))
+  `(composite ~validators interpret-is r/and))
 
 (defmacro ^:validator? or
   "Returns the disjunction of validator functions. The returned
@@ -300,64 +164,20 @@
   short-circuits and returns nil. If all validations fail, returns a
   sequence of errors."
   [& validators]
-  `(composite ~validators interpret-is arianna/or-combine))
-
-(defn apply-reduced [value f]
-  (if (reduced? value)
-    (reduced (f @value))
-    (f value)))
-
-(defn add-chain [validator {:keys [result] :as vr}]
-  (update-in vr [:chain] #(conj (clojure.core/or % [])
-                                {:validator validator
-                                 :result result})))
-
-(defn comp-f [{:keys [result] :as previous} validator]
-  (let [vr0 (internal-validate validator result)
-        vr (apply-reduced vr0 (partial add-chain validator))]
-    (if (clojure.core/or (reduced? vr) (valid? vr))
-      vr
-      (reduced vr))))
-
-(defn thread [{:keys [validators] :as this} value]
-  (clojure.core/->>
-   validators
-   (reduce comp-f
-           (assoc (report-success value)
-             :chain [{:validator this :result value}]))
-   strip-reduced))
+  `(composite ~validators interpret-is r/or))
 
 (defmacro ^:validator ->> [& validators]
-  `(composite ~validators interpret-as arianna/thread))
+  `(composite ~validators interpret-as r/thread))
 
 (defmacro ^:validator comp [& validators]
   `(let [v# (->> ~@validators)]
      (update-in v# [:validators] reverse)))
 
-(defn every-validate [validators this input]
-  (clojure.core/->> (for [v validators
-                          item input]
-                      (validate v item))
-                    (reduce and-all-f (report-success input))
-                    strip-reduced))
-
-(defn every-m [{:keys [validators] :as this} value]
-  (every-validate validators this value))
-
 (defmacro ^:validator every
   "Returns a validator function that applies the validators to each
   element of the input collection."
   [& validators]
-  `(composite-multiple ~validators interpret-is arianna/every-m))
-
-(defn are-m [this input]
-  (let [r (filterv #(not (partial-invoke-% this %)) input)]
-    (if (empty? r)
-      (report-success this input)
-      (->ValidationResult :error
-                          input
-                          (mapv #(ValidationError. this %) r)
-                          input))))
+  `(composite-multiple ~validators interpret-is r/every))
 
 (defmacro ^:validator are
   "Returns a validator which will call (pred ~@args input).
@@ -365,28 +185,16 @@
   ([pred & args]
      {:pre [(symbol? pred)]}
      ^:validator `(assoc (document-partial-% ~pred ~@args)
-                    :-method 'arianna/are-m
+                    :-method 'r/are
                     :-required? true)))
 
+(def always-true {:-method `r/always-true})
 
-(defn always-true-f [this input] (report-success input))
-
-(def always-true {:-method `always-true-f})
-
-(defn to-match-clause [[pred then]]
+(defn- to-match-clause [[pred then]]
   [(if (= pred :else)
      `always-true
      `(interpret-is ~pred))
    `(interpret-as ~then)])
-
-(defn-curried valid-clause [input clause]
-  (valid? input (first clause)))
-
-(defn cond-f [{:keys [clauses] :as this} input]
-  (if-let [clause
-           (first (filter (valid-clause input) clauses))]
-    (validate (second clause) input)
-    (report-failure this input)))
 
 (defmacro ^:validator cond
   "Returns a validator function that checks multiple conditions. Each
@@ -397,59 +205,15 @@
   [& clauses]
   (let [validators (map to-match-clause (partition 2 clauses))]
     `{:clauses (list ~@validators)
-      :-method 'cond-f}))
-
-(defn when-f [{:keys [pred then]} input]
-  (if (valid? input pred)
-    (validate then input)
-    (report-success input)))
+      :-method `r/cond}))
 
 (defmacro ^:validator when
   "Returns a validator that only checks the validators
   when pred validates."
   [pred & validators]
   `{:then (and ~@validators)
-    :-method 'when-f
+    :-method `r/when
     :pred (interpret-is ~pred)})
-
-;;; Validation functions
-
-(defn in-range? [min-incl max-excl value]
-  "Returns a validator function that checks if its input is numeric
-  and is between min, inclusive, and max, exclusive."
-  (clojure.core/and (<= min-incl value) (< value max-excl)))
-
-(defn within? [min-incl max-incl value]
-  "Returns a validator function that checks if its input is between
-  min and max, both inclusive. Uses clojure.core/compare to compare
-  values."
-  (not (clojure.core/or (neg? (compare value min-incl))
-                        (pos? (compare value max-incl)))))
-
-                                        ; Direct rip from libnoir
-
-(defn matches-regex?
-  "Returns true if the string matches the given regular expression"
-  [regex v]
-  (boolean (re-matches regex v)))
-
-(defn email?
-  "Returns true if v is an email address"
-  [v]
-  (matches-regex? #"(?i)[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?" v))
-
-; http://stackoverflow.com/questions/2640169/whats-the-easiest-way-to-parse-numbers-in-clojure
-
-; Don't think core.typed can verify this
-(defn parse-decimal-number [s]
-  "Reads a number from a string. Returns nil if not a number."
-  [s]
-  (if (clojure.core/and s
-           (re-find #"^\s*-?\d+\.?\d*([Ee]\+\d+|[Ee]-\d+|[Ee]\d+)?$" s))
-    (edn/read-string (s/replace s #"^0+(\d)" "$1"))))
-
-(defn number [s]
-  (if (number? s) s (parse-decimal-number s)))
 
 ;;; Invocation patterns
 

@@ -1,8 +1,9 @@
 (ns arianna.test.core
   (:require [arianna :as v]
             [arianna.validate :as av]
+            [arianna.runtime :as r]
             [clojure.test :refer :all])
-  (:import [arianna ValidationError ValidationResult]))
+  (:import [arianna.runtime ValidationError ValidationResult]))
 
 (def number-validator (v/is number?))
 
@@ -56,7 +57,7 @@
 (deftest optional-tests
   (is (instance? ValidationResult (v/validate is-even-optional 3)))
   (is (instance? ValidationResult (v/validate is-even-optional 4)))
-  (is (instance? ValidationResult @(v/internal-validate is-even-optional 4))))
+  (is (instance? ValidationResult @(r/internal-validate is-even-optional 4))))
 
 (def odd-integer (v/and is-integer is-odd))
 
