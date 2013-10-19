@@ -160,14 +160,14 @@
         "Missing ZIP should be acceptable with if-in."))
   (testing "Native syntax"
     (is (v/valid? john
-                  (v/->> (v/as [:address :city]) v/required (v/is string?)))
+                  (v/->> (v/as-key [:address :city]) v/required (v/is string?)))
         "City should be valid when required.")
     (is (not (v/valid? john
-                       (v/->> (v/as [:address :zip])
+                       (v/->> (v/as-key [:address :zip])
                               v/required
                               (v/is string?))))
         "Missing ZIP should be required.")
-    (is (v/valid? john (v/->> (v/as [:address :zip])
+    (is (v/valid? john (v/->> (v/as-key [:address :zip])
                               v/optional
                               (v/is string?)))
         "Missing ZIP should be acceptable when optional."))
@@ -187,8 +187,8 @@
 
 (def dn (v/as v/number))
 
-(def key-projection (v/as :name))
-(def key2-projection (v/as [:address :city]))
+(def key-projection (v/as-key :name))
+(def key2-projection (v/as-key [:address :city]))
 
 (deftest transform
   (is (= "John Doe" (:result (v/validate key-projection john))))
@@ -209,9 +209,12 @@
 
 (def bademail {:email "xxx"})
 
-(def email (v/->> (v/as :email) v/optional (v/is v/email?)))
+(def email (v/->> (v/as-key :email) v/optional (v/is v/email?)))
+(def email-idiomatic
+  (v/->> :email v/optional v/email?))
 
 (deftest email-tests
+  (is (= email email-idiomatic))
   (is (not (v/email? "test@abc")))
   (is (v/valid? {:email "xjobcon@phx.com"} email))
   (is (not (v/valid? {:email "test@abc"} email)))

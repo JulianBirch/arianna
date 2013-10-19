@@ -55,7 +55,7 @@
   "Like 'in' but does not return an error if the structure does not
   contain the given keys."
   [ks & validators]
-  `(a/->> (a/as ~ks)
+  `(a/->> (a/as-key ~ks)
           a/optional
           (a/and ~@validators)))
 

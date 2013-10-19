@@ -77,7 +77,7 @@
                     (get-in value projection default)
                     (get value projection default))))
 
-(defn has-key [{:keys [projection] :as this} value]
+(defn has [{:keys [projection] :as this} value]
   (let [result (if (vector? projection)
                  (get-in value projection ::missing)
                  (get value projection ::missing))]

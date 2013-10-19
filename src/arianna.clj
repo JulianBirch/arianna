@@ -18,7 +18,7 @@
   render-message]
  [arianna.methods
 
-  present?
+  absent?
   all-empty-rules
   in-range?
   within?
@@ -28,8 +28,7 @@
   number])
 
 (defn- valid-projection? [proj]
-  (clojure.core/or (symbol? proj)
-                   (keyword? proj)
+  (clojure.core/or (keyword? proj)
                    (vector? proj)))
 ;;; Validator-creating macros
 
@@ -58,29 +57,38 @@
      :-method `r/is-not))
 
 (defmacro ^:validator as
-  "Returns a validator which will call a projection.  "
+  "Returns a validator which will call a projection function.
+   Will fail if the returned value is equal to :-fail.  By default,
+   this means it will fail if the returned value is nil."
   [projection & args]
-  {:pre [(valid-projection? projection)]}
-  (if (clojure.core/and (symbol? projection)
-                        (not (keyword? `~projection))
-                        (ifn? `~projection)
-                        (resolve projection))
-    `(assoc (document-partial-% ~projection ~@args)
-       :-method `r/as)
-    `{:-method `r/as-key
-      :projection ~projection}))
+  {:pre [(symbol? projection)]}
+  `(assoc (document-partial-% ~projection ~@args)
+     :-method `r/as))
 
-;;; TODO: interpret-is should support has
+(defmacro ^:validator as-key
+  "Returns a validator which will look into a map.
+   Takes a keyword or a vector.  as-key never fails and
+   if the map doesn't have the key specified the result
+   will be the special value :arianna/missing.  You can test
+   for this with v/required, v/optional or
+   (v/is v/absent? :missing).  (The first two also test for
+   nil and blank strings.)"
+  [projection]
+  {:pre [(valid-projection? projection)]}
+  `{:-method `r/as-key
+    :projection ~projection})
+
 (defmacro ^:validator has
   "Returns a validator which will call (proj ~@args input).
-  proj must be a symbol.  "
-  ([proj]
-     {:pre [(valid-projection? proj)]}
-     `{:-method `r/has-key
-       :projection ~proj}))
+  proj must be a symbol.  has will fail if the map doesn't have the
+  key specified."
+  [projection]
+  {:pre [(valid-projection? projection)]}
+  `{:-method `r/has
+    :projection ~projection})
 
-(def optional (is-optional present? all-empty-rules))
-(def required (is-not present? all-empty-rules))
+(def optional (is-optional absent? all-empty-rules))
+(def required (is-not absent? all-empty-rules))
 
 ;;; interpreting things as is or as
 
@@ -90,14 +98,6 @@
       (if (-> r meta :validator not)
         (fn? @r)))
     (fn? s)))
-
-(defmacro interpret-is [v]
-  (clojure.core/or
-   (let [v (if (seq? v) v [v])
-         f (first v)]
-     (if (enhancable? f)
-       `(is ~@v)))
-   v))
 
 (defn- ends-with? [^String s ^String x]
   (.endsWith s x))
@@ -110,17 +110,23 @@
      (predicate-operators n)
      (ends-with? n "?"))) )
 
-(defmacro interpret-as [v]
+(defmacro interpret-internal [v as-key as]
   (clojure.core/or
-   (clojure.core/cond (vector? v) `(as ~v)
-                      (keyword? v) `(as ~v)
+   (clojure.core/cond (vector? v) `(~as-key ~v)
+                      (keyword? v) `(~as-key ~v)
                       :else (let [v (if (seq? v) v (list v))
                                   f (first v)]
                               (if (enhancable? f)
                                 (if (predicate-symbol? f)
                                   `(is ~@v)
-                                  `(as ~@v)))))
+                                  `(~as ~@v)))))
    v))
+
+(defmacro interpret-is [v]
+  `(interpret-internal ~v has is))
+
+(defmacro interpret-as [v]
+  `(interpret-internal ~v as-key as))
 
 ;;; composites
 

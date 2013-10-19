@@ -2,7 +2,7 @@
   (:require [clojure.edn :as edn]
             [clojure.string :as s]))
 
-(defn present? [rules value]
+(defn absent? [rules value]
   (clojure.core/or
    (if (contains? rules :missing)
      (= value ::missing))
