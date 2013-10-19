@@ -2,7 +2,8 @@
   (:refer-clojure :exclude [and comp cond or when])
   (:require [spyscope.core]
             [poppea :refer [document-partial-% partial-invoke-%
-                            defn-curried]]))
+                            defn-curried]]
+            [stencil.core :refer [render-string]]))
 
 (def ^:dynamic *enable-protect-exception* true)
 
@@ -117,10 +118,10 @@
     (reduced current)))
 
 (defn-curried make-and-combine [f {:keys [validators]} value]
-  (clojure.core/->> validators
-                    (map #(internal-validate % value))
-                    (reduce f (report-success value))
-                    strip-reduced))
+  (->> validators
+       (map #(internal-validate % value))
+       (reduce f (report-success value))
+       strip-reduced))
 
 (def and (make-and-combine and-f))
 (def and-all (make-and-combine and-all-f))
@@ -132,10 +133,10 @@
 
 (defn or [{:keys [validators] :as this} value]
   (let [fail (->ValidationResult :error nil [] value)
-        vr (clojure.core/->> validators
-                             (mapv #(internal-validate % value))
-                             (reduce or-f fail)
-                             strip-reduced)]
+        vr (->> validators
+                (mapv #(internal-validate % value))
+                (reduce or-f fail)
+                strip-reduced)]
     (if (valid? vr)
       vr
       (let [or-error (assoc (ValidationError. this value)
@@ -157,7 +158,7 @@
                                 {:validator validator
                                  :result result})))
 
-(defn comp-f [{:keys [result] :as previous} validator]
+(defn thread-f [{:keys [result] :as previous} validator]
   (let [vr0 (internal-validate validator result)
         vr (apply-reduced vr0 (partial add-chain validator))]
     (if (clojure.core/or (reduced? vr) (valid? vr))
@@ -165,20 +166,19 @@
       (reduced vr))))
 
 (defn thread [{:keys [validators] :as this} value]
-  (clojure.core/->>
-   validators
-   (reduce comp-f
-           (assoc (report-success value)
-             :chain [{:validator this :result value}]))
-   strip-reduced))
+  (->> validators
+       (reduce thread-f
+               (assoc (report-success value)
+                 :chain [{:validator this :result value}]))
+       strip-reduced))
 
 ;; every
 (defn every-validate [validators this input]
-  (clojure.core/->> (for [v validators
-                          item input]
-                      (validate v item))
-                    (reduce and-all-f (report-success input))
-                    strip-reduced))
+  (->> (for [v validators
+             item input]
+         (validate v item))
+       (reduce and-all-f (report-success input))
+       strip-reduced))
 
 (defn every [{:keys [validators] :as this} value]
   (every-validate validators this value))
@@ -209,3 +209,21 @@
   (if (valid? input pred)
     (validate then input)
     (report-success input)))
+
+(defn ^:validator message [this message]
+  (assoc this :message message))
+
+(defprotocol ValidationMessage
+  (render-message- [this validation-result]))
+
+(extend-protocol ValidationMessage
+  String
+  (render-message- [this validation-error]
+    (render-string this validation-error)))
+
+(defn render-message [validation-error]
+  (if-let [message
+           (get-in validation-error [:validator :message] nil)]
+    (if (satisfies? ValidationMessage message)
+      (render-message- message validation-error)
+      (message validation-error))))

@@ -242,3 +242,19 @@
       (is (not (v/valid? vr)))
       (is (= missing-clause
              (-> vr :errors first :validator))))))
+
+(deftest human-readable
+  (let [er (-> (v/is < % 10)
+               (v/message "The value {{value}} is not less than {{validator.y}}.")
+               (v/validate 42)
+               :errors
+               first)]
+    (is (= "The value 42 is not less than 10."
+           (v/render-message er))))
+  (let [er (-> (v/is < % 10)
+               (v/message #(str "Bad value was " (:value %) "."))
+               (v/validate 42)
+               :errors
+               first)]
+    (is (= "Bad value was 42."
+           (v/render-message er)))))

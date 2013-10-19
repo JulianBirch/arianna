@@ -13,8 +13,11 @@
 
   validate
   validate-debug
-  valid?]
+  valid?
+  message
+  render-message]
  [arianna.methods
+
   present?
   all-empty-rules
   in-range?
