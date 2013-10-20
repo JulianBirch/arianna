@@ -205,8 +205,8 @@
     (validate (second clause) input)
     (report-failure this input)))
 
-(defn when [{:keys [pred then]} input]
-  (if (valid? input pred)
+(defn when [{:keys [predicate then]} input]
+  (if (valid? (validate predicate input))
     (validate then input)
     (report-success input)))
 

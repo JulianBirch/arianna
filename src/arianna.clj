@@ -33,27 +33,44 @@
 ;;; Validator-creating macros
 
 (defmacro ^:validator is
-  "Returns a validator which will call (pred ~@args input).
-  pred must be a symbol."
-  [pred & args]
-  {:pre [(symbol? pred)]}
-  `(assoc (document-partial-% ~pred ~@args)
+  "Returns a validator which will call (predicate ~@args input).
+   Can use clojure's % syntax like an anonymous function, so
+   (v/is < % 10) will call (< input 10).
+
+   predicate must be a symbol.
+
+   Example usages
+   (v/is string?)
+   (v/is < % 10)"
+  [predicate & args]
+  {:pre [(symbol? predicate)]}
+  `(assoc (document-partial-% ~predicate ~@args)
      :-method `r/is))
 
 (defmacro ^:validator is-optional
-  "Returns a validator which will call (pred ~@args input).
-  pred must be a symbol."
-  [pred & args]
-  {:pre [(symbol? pred)]}
-  `(assoc (document-partial-% ~pred ~@args)
+  "Returns a validator, like is, which will call
+   (predicate ~@args input). The validation result is always true,
+   but if the test is true the composite predicate will immediately
+   short-circuit.
+
+   Example usage:
+   (v/is-optional v/absent? :nil :blank)
+
+   Which prevents evaluation of subsequent validators if the value
+   is nil or blank.
+
+   predicate must be a symbol."
+  [predicate & args]
+  {:pre [(symbol? predicate)]}
+  `(assoc (document-partial-% ~predicate ~@args)
      :-method `r/is-optional))
 
 (defmacro ^:validator is-not
-  "Returns a validator which will call
-  (not (pred ~@args input)). pred must be a symbol."
-  [pred & args]
-  {:pre [(symbol? pred)]}
-  `(assoc (document-partial-% ~pred ~@args)
+  "Returns a validator, like is,  which will call
+  (not (predicate ~@args input)). predicate must be a symbol."
+  [predicate & args]
+  {:pre [(symbol? predicate)]}
+  `(assoc (document-partial-% ~predicate ~@args)
      :-method `r/is-not))
 
 (defmacro ^:validator as
@@ -104,11 +121,11 @@
 
 (def predicate-operators #{"<" "<=" "=" "==" ">=" ">"})
 
-(defn predicate-symbol? [f]
+(defn- predicate-symbol? [f]
   (let [n (name f)]
     (clojure.core/or
      (predicate-operators n)
-     (ends-with? n "?"))) )
+     (ends-with? n "?"))))
 
 (defmacro interpret-internal [v as-key as]
   (clojure.core/or
@@ -189,20 +206,19 @@
   `(composite-multiple ~validators interpret-is r/every))
 
 (defmacro ^:validator are
-  "Returns a validator which will call (pred ~@args input).
-  pred must be a symbol."
-  ([pred & args]
-     {:pre [(symbol? pred)]}
-     ^:validator `(assoc (document-partial-% ~pred ~@args)
-                    :-method 'r/are
-                    :-required? true)))
+  "Returns a validator which will call (predicate ~@args input).
+  predicate must be a symbol."
+  ([predicate & args]
+     {:pre [(symbol? predicate)]}
+     ^:validator `(assoc (document-partial-% ~predicate ~@args)
+                    :-method 'r/are)))
 
 (def always-true {:-method `r/always-true})
 
-(defn- to-match-clause [[pred then]]
-  [(if (= pred :else)
+(defn- to-match-clause [[predicate then]]
+  [(if (= predicate :else)
      `always-true
-     `(interpret-is ~pred))
+     `(interpret-is ~predicate))
    `(interpret-as ~then)])
 
 (defmacro ^:validator cond
@@ -218,11 +234,11 @@
 
 (defmacro ^:validator when
   "Returns a validator that only checks the validators
-  when pred validates."
-  [pred & validators]
+  when predicate validates."
+  [predicate & validators]
   `{:then (and ~@validators)
     :-method `r/when
-    :pred (interpret-is ~pred)})
+    :predicate (interpret-is ~predicate)})
 
 ;;; Invocation patterns
 
