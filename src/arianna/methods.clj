@@ -5,7 +5,7 @@
 (defn absent? [rules value]
   (clojure.core/or
    (if (contains? rules :missing)
-     (= value ::missing))
+     (= value :arianna/missing))
    (if (contains? rules :nil)
      (nil? value))
    (clojure.core/and

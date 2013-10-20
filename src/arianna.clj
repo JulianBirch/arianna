@@ -27,7 +27,7 @@
   parse-decimal-number
   number])
 
-(defn- valid-projection? [proj]
+(defn valid-projection? [proj]
   (clojure.core/or (keyword? proj)
                    (vector? proj)))
 ;;; Validator-creating macros
@@ -82,7 +82,7 @@
   `(assoc (document-partial-% ~projection ~@args)
      :-method `r/as))
 
-(defmacro ^:validator as-key
+(defn ^:validator as-key
   "Returns a validator which will look into a map.
    Takes a keyword or a vector.  as-key never fails and
    if the map doesn't have the key specified the result
@@ -92,17 +92,18 @@
    nil and blank strings.)"
   [projection]
   {:pre [(valid-projection? projection)]}
-  `{:-method `r/as-key
-    :projection ~projection})
+  {:-method `r/as-key
+   :projection projection
+   :default :arianna/missing})
 
-(defmacro ^:validator has
+(defn ^:validator has
   "Returns a validator which will call (proj ~@args input).
   proj must be a symbol.  has will fail if the map doesn't have the
   key specified."
   [projection]
   {:pre [(valid-projection? projection)]}
-  `{:-method `r/has
-    :projection ~projection})
+  {:-method `r/has
+   :projection projection})
 
 (def optional (is-optional absent? all-empty-rules))
 (def required (is-not absent? all-empty-rules))
@@ -129,15 +130,18 @@
 
 (defmacro interpret-internal [v as-key as]
   (clojure.core/or
-   (clojure.core/cond (vector? v) `(~as-key ~v)
-                      (keyword? v) `(~as-key ~v)
-                      :else (let [v (if (seq? v) v (list v))
-                                  f (first v)]
-                              (if (enhancable? f)
-                                (if (predicate-symbol? f)
-                                  `(is ~@v)
-                                  `(~as ~@v)))))
-   v))
+   (if (valid-projection? v)
+     `(~as-key ~v)
+     (let [v (if (seq? v) v (list v))
+           f (first v)]
+       (if (enhancable? f)
+         (if (predicate-symbol? f)
+           `(is ~@v)
+           `(~as ~@v)))))
+   `(let [v# ~v]
+      (if (valid-projection? v#)
+        (~as-key v#)
+        v#))))
 
 (defmacro interpret-is [v]
   `(interpret-internal ~v has is))
@@ -208,10 +212,10 @@
 (defmacro ^:validator are
   "Returns a validator which will call (predicate ~@args input).
   predicate must be a symbol."
-  ([predicate & args]
-     {:pre [(symbol? predicate)]}
-     ^:validator `(assoc (document-partial-% ~predicate ~@args)
-                    :-method 'r/are)))
+  [predicate & args]
+  {:pre [(symbol? predicate)]}
+  `(assoc (document-partial-% ~predicate ~@args)
+     :-method 'r/are))
 
 (def always-true {:-method `r/always-true})
 

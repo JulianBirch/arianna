@@ -261,3 +261,10 @@
                first)]
     (is (= "Bad value was 42."
            (v/render-message er)))))
+
+(deftest idiomatic-in-let
+  (let [k :x]
+    (is (= :arianna/missing (:result (v/validate (v/->> k) {})))))
+  (let [v (v/is string?)]
+    (is (= false (v/valid? (v/validate (v/->> v) {}))))
+    (is (= true (v/valid? (v/validate (v/->> v) ""))))))
