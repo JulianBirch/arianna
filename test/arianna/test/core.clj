@@ -5,6 +5,9 @@
             [clojure.test :refer :all])
   (:import [arianna.runtime ValidationError ValidationResult]))
 
+(defn get-errors [validator input]
+  (:errors (v/validate validator input)))
+
 (def number-validator (v/is number?))
 
 (deftest simple
@@ -25,9 +28,6 @@
 (def under-10
   (assoc (v/is >= 10)
     :error "must be less than 10"))
-
-(defn get-errors [validator input]
-  (:errors (v/validate validator input)))
 
 (deftest u10
   (is (= (:error under-10) "must be less than 10")
@@ -248,14 +248,15 @@
 
 (deftest human-readable
   (let [er (-> (v/is < % 10)
-               (v/message "The value {{value}} is not less than {{validator.y}}.")
+               (assoc :-message "The value {{value}} is not less than {{validator.y}}.")
                (v/validate 42)
                :errors
                first)]
     (is (= "The value 42 is not less than 10."
            (v/render-message er))))
   (let [er (-> (v/is < % 10)
-               (v/message #(str "Bad value was " (:value %) "."))
+               (assoc :-message
+                 #(str "Bad value was " (:value %) "."))
                (v/validate 42)
                :errors
                first)]
@@ -268,3 +269,28 @@
   (let [v (v/is string?)]
     (is (= false (v/valid? (v/validate (v/->> v) {}))))
     (is (= true (v/valid? (v/validate (v/->> v) ""))))))
+
+(def complex
+  (v/and-all
+   (v/->> :x
+          v/required "The x field is required."
+          string? "String {{value}}")
+   (v/->> :y
+          integer? "Integer {{value}}"
+          even? "Even {{value}}")))
+
+(deftest idiomatic-messages
+  (is (= { nil ["The value 3 is not a string."]}
+         (v/summarize (v/->> string? "The value {{value}} is not a string.") 3)))
+  (is (= {:x ["The x field is required."]
+          :y ["Even 5"]}
+         (v/summarize complex {:y 5})))
+  (is (= {:x ["String 9"]
+          :y ["Integer X"]}
+         (v/summarize complex {:x 9 :y "X"}))))
+
+(deftest equivalence
+  (is (= (v/is string?) (v/->> string?))
+      "Representation of is string should be unaffected.")
+  (is (= (v/as-key :x) (v/->> :x)))
+  (is (= (v/has [:x]) (v/has :x))))

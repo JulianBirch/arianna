@@ -14,8 +14,8 @@
   validate
   validate-debug
   valid?
-  message
-  render-message]
+  render-message
+  summarize]
  [arianna.methods
 
   absent?
@@ -82,6 +82,11 @@
   `(assoc (document-partial-% ~projection ~@args)
      :-method `r/as))
 
+(defn strip-vector [p]
+  (if (clojure.core/and (vector? p) (= 1 (count p)))
+    (first p)
+    p))
+
 (defn ^:validator as-key
   "Returns a validator which will look into a map.
    Takes a keyword or a vector.  as-key never fails and
@@ -93,7 +98,7 @@
   [projection]
   {:pre [(valid-projection? projection)]}
   {:-method `r/as-key
-   :projection projection
+   :projection (strip-vector projection)
    :default :arianna/missing})
 
 (defn ^:validator has
@@ -103,7 +108,7 @@
   [projection]
   {:pre [(valid-projection? projection)]}
   {:-method `r/has
-   :projection projection})
+   :projection (strip-vector projection)})
 
 (def optional (is-optional absent? all-empty-rules))
 (def required (is-not absent? all-empty-rules))
@@ -151,25 +156,43 @@
 
 ;;; composites
 
-(defn- single
-  ([list default]
-     (if (nil? (next list))
-       (first list)
-       default))
+(defn single
+  ([[x & xs] default] (if (empty? xs) x default))
   ([list] (single list nil)))
 
-(defmacro composite-multiple [validators interpret combine]
-  {:pre [(symbol? combine)]}
-  (let [vs (map (fn [v] `(~interpret ~v)) validators)
-        vs (cons 'list vs)
-        s (str combine)]
-    `{:validators ~vs
-      :-method (symbol ~s)}))
+(defn eat [pred vs]
+  (let [[a n] (split-with pred (rest vs))]
+    [(cons (first vs) a) n]))
 
-(defmacro composite [validators interpret combine]
-  (if-let [v (single validators)]
-    `(~interpret ~v)
-    `(composite-multiple ~validators ~interpret ~combine)))
+(defn-curried partition-runs-f [pred [vs a] v]
+  (if (pred v)
+    [(conj vs a) [v]]
+    [vs (conj a v)]))
+
+(defn partition-runs [pred [x & xs]]
+  (apply conj (reduce (partition-runs-f pred) [[] [x]] xs)))
+
+(defn make-validator [vs]
+  (clojure.core/->> vs
+                    (map #(if (string? %) {:-message %} %))
+                    (apply merge)))
+
+(defmacro composite
+  ([validators interpret combine]
+     {:pre [(symbol? combine) (symbol? interpret)]}
+     `(composite ~validators ~interpret ~combine false))
+  ([validators interpret combine force-multiple]
+     {:pre [(symbol? combine) (symbol? interpret)]}
+     (let [vs (map (fn [v] `(~interpret ~v)) validators)
+           vs (cons 'list vs)
+           vals (gensym "vals")
+           c `{:validators ~vals
+               :-method (symbol ~(str combine))}]
+       `(let [~vals (map make-validator
+                         (partition-runs :-method ~vs))]
+          ~(if force-multiple
+             c
+             `(clojure.core/or (single ~vals) ~c))))))
 
 (defmacro ^:validator and-all
   "Returns a single validator function which takes a single argument
@@ -207,7 +230,7 @@
   "Returns a validator function that applies the validators to each
   element of the input collection."
   [& validators]
-  `(composite-multiple ~validators interpret-is r/every))
+  `(composite ~validators interpret-is r/every true))
 
 (defmacro ^:validator are
   "Returns a validator which will call (predicate ~@args input).

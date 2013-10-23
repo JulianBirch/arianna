@@ -153,23 +153,32 @@
     (reduced (f @value))
     (f value)))
 
-(defn add-chain [validator {:keys [result] :as vr}]
-  (update-in vr [:chain] #(conj (clojure.core/or % [])
-                                {:validator validator
-                                 :result result})))
+(defn enhance-with-chain [{:keys [errors] :as vr} chain]
+  (assoc vr :errors
+         (map (fn [e] (update-in e [:chain]
+                                (fn [c] (concat chain c))))
+              errors)))
 
-(defn thread-f [{:keys [result] :as previous} validator]
-  (let [vr0 (internal-validate validator result)
-        vr (apply-reduced vr0 (partial add-chain validator))]
-    (if (clojure.core/or (reduced? vr) (valid? vr))
-      vr
-      (reduced vr))))
+(defn thread-f [[{:keys [result] :as previous} chain] validator]
+  (let [vr (internal-validate validator result)
+        chain (conj chain
+                    {:validator validator
+                     :result (:result (strip-reduced vr))})
+        vr1 (strip-reduced vr)
+        result (if (valid? vr1)
+                 [vr1 chain]
+                 [(enhance-with-chain vr1 chain)])]
+    (if (clojure.core/or (reduced? vr)
+                         (not (valid? vr1)))
+      (reduced result)
+      result)))
 
 (defn thread [{:keys [validators] :as this} value]
   (->> validators
        (reduce thread-f
-               (assoc (report-success value)
-                 :chain [{:validator this :result value}]))
+               [(report-success value)
+                [{:validator this :result value}]])
+       first
        strip-reduced))
 
 ;; every
@@ -210,9 +219,6 @@
     (validate then input)
     (report-success input)))
 
-(defn ^:validator message [this message]
-  (assoc this :message message))
-
 (defprotocol ValidationMessage
   (render-message- [this validation-result]))
 
@@ -222,8 +228,41 @@
     (render-string this validation-error)))
 
 (defn render-message [validation-error]
-  (if-let [message
-           (get-in validation-error [:validator :message] nil)]
+  (if-let [message (get-in validation-error
+                           [:validator :-message] nil)]
     (if (satisfies? ValidationMessage message)
       (render-message- message validation-error)
       (message validation-error))))
+
+(defn- validator-field [v]
+  (clojure.core/or
+   (:-field v)
+   (:projection v)))
+
+(defn field [{:keys [validator] :as validation-error}]
+  (clojure.core/or
+   (validator-field validator)
+   ; TODO
+   (->> validation-error
+        :chain
+        (map #(-> % :validator validator-field))
+        (remove nil?)
+        first)))
+
+(defn group-by-with-map
+  [k v coll]
+  (persistent!
+   (reduce
+    (fn [ret x]
+      (let [k (k x)]
+        (assoc! ret k (conj (get ret k []) (v x)))))
+    (transient {}) coll)))
+
+(defn summarize
+  "Turns a validation result into a map of field, list of message"
+  ([vr] (if (not (valid? vr))
+          (group-by-with-map field
+                             render-message
+                             (:errors vr))))
+  ([validator input]
+     (summarize (validate validator input))))
