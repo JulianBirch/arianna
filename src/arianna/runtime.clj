@@ -239,15 +239,21 @@
    (:-field v)
    (:projection v)))
 
-(defn field [{:keys [validator] :as validation-error}]
+(def projections #{'arianna.runtime/as-key 'arianna.runtime/has})
+
+(defn extract-projection [{{m :-method :as v} :validator}]
+  (if (contains? projections m)
+    (:projection v)))
+
+(defn field [validation-error]
   (clojure.core/or
-   (validator-field validator)
-   ; TODO
-   (->> validation-error
-        :chain
-        (map #(-> % :validator validator-field))
-        (remove nil?)
-        first)))
+   (-> validation-error :validator :-field)
+   (if-let [chain (:chain validation-error)]
+     (->> (map #(-> % :validator :-field) (reverse chain))
+          (concat (map extract-projection chain))
+          (remove nil?)
+          first))
+   (extract-projection validation-error)))
 
 (defn group-by-with-map
   [k v coll]

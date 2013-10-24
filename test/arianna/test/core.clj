@@ -279,6 +279,8 @@
           integer? "Integer {{value}}"
           even? "Even {{value}}")))
 
+(defn fun? [projection] false)
+
 (deftest idiomatic-messages
   (is (= { nil ["The value 3 is not a string."]}
          (v/summarize (v/->> string? "The value {{value}} is not a string.") 3)))
@@ -287,7 +289,14 @@
          (v/summarize complex {:y 5})))
   (is (= {:x ["String 9"]
           :y ["Integer X"]}
-         (v/summarize complex {:x 9 :y "X"}))))
+         (v/summarize complex {:x 9 :y "X"})))
+  (is (= { nil [nil] } (v/summarize (v/->> fun?) "potty training"))
+      "Field should not pick up projection fields that don't belong
+to projections.")
+  (is (= { "Hello" ["World"] } (v/summarize (v/->> fun? {:-field "Hello"} "World") "potty training"))
+      "Field should not pick up projection fields that don't belong
+to projections.")
+  (is (= nil (v/summarize (v/is number?) 3))))
 
 (deftest equivalence
   (is (= (v/is string?) (v/->> string?))
