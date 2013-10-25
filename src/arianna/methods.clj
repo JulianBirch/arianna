@@ -13,8 +13,6 @@
     (string? value)
     (s/blank? value))))
 
-(def all-empty-rules #{:missing :nil :blank})
-
 ;;; Validation functions
 
 (defn in-range? [min-incl max-excl value]
