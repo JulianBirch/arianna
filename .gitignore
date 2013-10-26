@@ -2,3 +2,4 @@
 .lein*
 /pom.xml
 .#*
+/doc/
