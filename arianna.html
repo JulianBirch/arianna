@@ -1,0 +1,539 @@
+<html lang="en">
+  <head>
+    <title>arianna documentation</title>
+    <link href="css/default.css" type="text/css" rel="stylesheet" />
+    <link href="css/codox-md.css" type="text/css" rel="stylesheet" />
+    <script type="text/javascript" src="js/jquery.min.js"></script>
+    <script type="text/javascript" src="js/page_effects.js"></script>
+  </head>
+  <body>
+    <header>
+      <div id="header">
+        <h1 class="project-title">Arianna 0.2.0 API documentation</h1>
+      </div>
+    </header>
+    <navigation>
+      <div id="namespaces" class="sidebar">
+        <h3>Namespaces</h3>
+        <ul class="ns-links">
+          <li class="ns-list"><a class="ns-link ns-name" href="arianna.html">arianna</a></li>
+        </ul>
+      </div>
+      <div id="vars" class="sidebar">
+        <h3>Public Vars</h3>
+        <ul class="ns-var-links">
+          <li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var--%3E%3E">-&gt;&gt;</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-absent%3F">absent?</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-always-true">always-true</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-and">and</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-and-all">and-all</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-are">are</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-as">as</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-as-key">as-key</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-assert-valid">assert-valid</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-comp">comp</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-cond">cond</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-email%3F">email?</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-every">every</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-field">field</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-has">has</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-in-range%3F">in-range?</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-is">is</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-is-not">is-not</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-is-optional">is-optional</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-matches-regex%3F">matches-regex?</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-number">number</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-optional">optional</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-or">or</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-parse-decimal-number">parse-decimal-number</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-render-message">render-message</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-required">required</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-summarize">summarize</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-valid%3F">valid?</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-validate">validate</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-validate-debug">validate-debug</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-when">when</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="arianna.html#var-within%3F">within?</a></li>
+        </ul>
+      </div>
+    </navigation>
+    <article>
+      <div id="content" class="namespace-docs">
+        <h2 class="namespace-title">arianna documentation</h2>
+        <div class="doc">
+</div>
+        <div class="ns-vars">
+          <div class="public">
+            <h3><a id="var--%3E%3E" class="source var-name" href="src/arianna/api.clj">-&gt;&gt;</a></h3>
+            <h4 class="var-type macro" id="var-type">macro</h4>
+            <div class="usage">[&amp; validators]</div>
+            
+            
+            <div class="doc"><p>Creates a validator that chains the result of one validator into
+the next.  Validators that are tests, such as <code>is</code> will have
+output the same as their input.  Any failed validation or
+sucessful <code>is-optional</code> test will terminate the evaluation.  The
+validation error will contain a key <code>:chain</code> which contains the
+chain of validation results that led to the error.</p>
+
+<p><code>-&gt;&gt;</code> is a macro that has a number of interpretation rules that
+transform normal clojure syntax into validators.</p>
+
+<ul>
+<li><code>string?</code> becomes <code>(v/is string?)</code></li>
+<li><code>inc</code> becomes <code>(v/as inc)</code></li>
+<li><code>:key</code> becomes <code>(v/as-key :key)</code></li>
+<li><code>["City" "Zip"] becomes</code>(v/as-key `["City" "Zip"])</li>
+</ul>
+
+<p><code>is</code> is used if the name of the function ends with a question
+mark or if it's a comparison operator in clojure.core.</p>
+
+<p>Chaining these together gives you the ability to do things like
+this:</p>
+
+<pre><code>(v/-&gt;&gt; :should-be-even v/required v/number even?)
+;;; Input should be a map with a key :should-be-even
+;;; that can be read as a number and that number is even.
+
+(v/-&gt;&gt; :email v/optional v/email?)
+;;; Input should be an email address or blank.
+
+(v/-&gt;&gt; keys (v/are keyword?))
+;;; Input should be a map where all the keys are keywords
+</code></pre>
+
+<p>Next, if you follow a validator with a map, it will be merged
+into the validator.</p>
+
+<pre><code>(v/-&gt;&gt; :email {:default "xjobcon@phx.cam.ac.uk"})
+;;; Provides a default email address
+;;; see also `as-key` for more details
+</code></pre>
+
+<p>Finally, strings are treated as maps with a <code>:-message</code> key.
+These are used to provide human readable feedback by using
+stencil/mustache on the validation errors.</p>
+
+<pre><code>(v/-&gt;&gt; :email
+       v/required "You must provide an email."
+       v/email? "The input {{value}} doesn't appear to be an email address.")
+</code></pre>
+</div>
+          </div><div class="public">
+            <h3><a id="var-absent%3F" class="source var-name" href="src/arianna/methods.clj">absent?</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[rules value]</div>
+            
+            
+            <div class="doc"><p>Method that is used to determine if the <code>value</code> is absent in
+some way.  Rules should be a set.  The possible values of the
+set are:</p>
+
+<ul>
+<li><code>:nil</code>: return true if the value is <code>nil</code></li>
+<li><code>:blank</code>: return true if the value is an empty string</li>
+<li><code>:missing</code>: return true if the value is <code>:arianna/missing</code></li>
+</ul>
+
+<p>The last, <code>:missing</code> is a special value returned by <code>as-key</code>
+when it fails to find the key.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-always-true" class="source var-name" href="src/arianna/api.clj">always-true</a></h3>
+            <h4 class="var-type var" id="var-type">var</h4>
+            
+            
+            
+            <div class="doc"><p>A validator that returns true for any input.  Only really useful
+at the repl.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-and" class="source var-name" href="src/arianna/api.clj">and</a></h3>
+            <h4 class="var-type macro" id="var-type">macro</h4>
+            <div class="usage">[&amp; validators]</div>
+            
+            
+            <div class="doc"><p>Takes a sequence of validators and creates a validator that
+applies them all, terminating if one fails.</p>
+
+<p><code>and</code> has similar interpretation rules to <code>-&gt;&gt;</code>:</p>
+
+<ul>
+<li><code>string?</code> becomes <code>(v/is string?)</code></li>
+<li><code>inc</code> becomes <code>(v/is inc)</code></li>
+<li><code>:key</code> becomes <code>(v/has :key)</code></li>
+<li><code>["City" "Zip"] becomes</code>(v/as-key `["City" "Zip"])</li>
+</ul>
+
+<p>Note the differences:
+* inc is treated as a test (since a transform would make no sense)
+* if <code>:key</code> cannot be found, it's treated as a validation failure.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-and-all" class="source var-name" href="src/arianna/api.clj">and-all</a></h3>
+            <h4 class="var-type macro" id="var-type">macro</h4>
+            <div class="usage">[&amp; validators]</div>
+            
+            
+            <div class="doc"><p>Takes a sequence of validators and creates a validator that
+applies them all, failing but not terminating if one fails.
+It will return all validation errors, while <code>and</code> will only
+return the first.</p>
+
+<p>Uses the same interpretation rules as <code>and</code>.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-are" class="source var-name" href="src/arianna/api.clj">are</a></h3>
+            <h4 class="var-type macro" id="var-type">macro</h4>
+            <div class="usage">[predicate &amp; args]</div>
+            
+            
+            <div class="doc"><p>Returns a validator which will call <code>(predicate ~@args x)</code> on
+ every element <code>x</code> in the input value.</p>
+
+<p><code>predicate</code> must be a symbol.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-as" class="source var-name" href="src/arianna/api.clj">as</a></h3>
+            <h4 class="var-type macro" id="var-type">macro</h4>
+            <div class="usage">[projection &amp; args]</div>
+            
+            
+            <div class="doc"><p>Returns a validator which will call <code>(projection ~@args input)</code>.
+This will fail if the returned value is equal to :-fail.
+By default, this means it will fail if the returned value is nil.</p>
+
+<pre><code>(v/as number)
+;;; will fail if the input was not a number or a string
+;;; representing a number
+
+(assoc (v/as inc) :-fail 3)
+;;; Will fail if the input was equal to 2
+</code></pre>
+
+<p>Supports use of the <code>%</code> symbol, same as <code>is</code>.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-as-key" class="source var-name" href="src/arianna/api.clj">as-key</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[projection]</div>
+            
+            
+            <div class="doc"><p>Returns a validator which will look into a map.
+Takes a keyword or a vector.  as-key never fails and
+if the map doesn't have the key specified the result
+will be the special value :arianna/missing.  You can test
+for this with v/required, v/optional or
+(v/is v/absent? #{:missing}).  (The first two also test for
+nil and blank strings.)</p>
+
+<p>The validator has two keys: <code>:projection</code> which is the
+input parameter and <code>:default</code>, which is the value returned
+if the value is missing.</p>
+
+<pre><code>(v/as-key :x)
+;;; Returns :arianna/missing if :x is not present
+(assoc (v/as-key :x) :default 3)
+;;; Returns 3 if :x is not present
+(v/-&gt;&gt; :x {:default 3})
+;;; Exactly the same as the last example
+</code></pre>
+
+<p>Note that :projection will have
+the vector removed if it's a vector with one element.  (This
+makes reporting the results simpler later, since [:x] is
+functionally identical to :x.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-assert-valid" class="source var-name" href="src/arianna/api.clj">assert-valid</a></h3>
+            <h4 class="var-type macro" id="var-type">macro</h4>
+            <div class="usage">[expr &amp; validators]</div>
+            
+            
+            <div class="doc"><p>Tests the value of <code>expr</code> with <code>validators</code>. If it passes,
+returns the value. If not, throws an exception with
+validation, line and file information attached.</p>
+
+<p>Applies <code>and-all</code> to validators.</p>
+
+<p>Note that this takes the <code>expr</code> first, making it suitable
+for use with <code>-&gt;</code>, and can be used to validate that long
+chains of <code>-&gt;</code> have usable intermediate values.</p>
+
+<pre><code>(-&gt; x
+    inc
+    (* 4)
+    (v/assert-valid even?)
+    (/ 2))
+</code></pre>
+</div>
+          </div><div class="public">
+            <h3><a id="var-comp" class="source var-name" href="src/arianna/api.clj">comp</a></h3>
+            <h4 class="var-type macro" id="var-type">macro</h4>
+            <div class="usage">[&amp; validators]</div>
+            
+            
+            <div class="doc"><p>Functionally identical to <code>-&gt;&gt;</code> except that it evaluates
+the validators right to left instead of left to right.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-cond" class="source var-name" href="src/arianna/api.clj">cond</a></h3>
+            <h4 class="var-type macro" id="var-type">macro</h4>
+            <div class="usage">[&amp; clauses]</div>
+            
+            
+            <div class="doc"><p>Creates a validator function that checks multiple conditions. Each
+clause is a pair of a predicate and a validator.  Like <code>cond</code>, you
+can put <code>:else</code> as the last predicate.  If you fail a clause, you
+get back that clause's validator as a failure.  If no clauses match
+you get back the cond validator.</p>
+
+<p>Uses the same rules as <code>and</code> on the predicate clauses, and
+the same rules as <code>-&gt;&gt;</code> on the validator clauses.  However, it
+doesn't support trailing maps or strings.  You're recommended
+to wrap the validator clause in <code>-&gt;&gt;</code> in those cases.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-email%3F" class="source var-name" href="src/arianna/methods.clj">email?</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[v]</div>
+            
+            
+            <div class="doc"><p>Returns true if <code>v</code> is an email address.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-every" class="source var-name" href="src/arianna/api.clj">every</a></h3>
+            <h4 class="var-type macro" id="var-type">macro</h4>
+            <div class="usage">[&amp; validators]</div>
+            
+            
+            <div class="doc"><p>Returns a validator that applies the validators to each
+element of the input collection.</p>
+
+<p>Uses the same interpretation rules as <code>and</code>.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-field" class="source var-name" href="src/arianna/runtime.clj">field</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[validation-error]</div>
+            
+            
+            <div class="doc"><p>Identifies the field associated with a validation error.  One
+of the following:</p>
+
+<ul>
+<li>The <code>:-field</code> of the validator, if any.</li>
+<li>The projection of <code>v/as-key</code> or <code>v/has</code>.</li>
+</ul>
+
+<p>If the <code>:-field</code> property isn't available, it will scan <em>back</em>
+through the validation chain for a <code>:-field</code>.  If that fails,
+it will scan <em>forward</em> through the chain for a projection.
+Only then will it check the current validator for a projection.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-has" class="source var-name" href="src/arianna/api.clj">has</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[projection]</div>
+            
+            
+            <div class="doc"><p><code>has</code> behaves the same as <code>as-key</code>, expect that if the
+<code>projection</code> does not have a value, the validator fails.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-in-range%3F" class="source var-name" href="src/arianna/methods.clj">in-range?</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[min-incl max-excl value]</div>
+            
+            
+            <div class="doc"><p>Method that checks if its <code>value</code> is numeric
+and is between min, inclusive, and max, exclusive.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-is" class="source var-name" href="src/arianna/api.clj">is</a></h3>
+            <h4 class="var-type macro" id="var-type">macro</h4>
+            <div class="usage">[predicate &amp; args]</div>
+            
+            
+            <div class="doc"><p>Returns a validator which will call <code>(predicate ~@args input)</code>.
+Can use clojure's % syntax like an anonymous function, so
+<code>(v/is &lt; % 10)</code> will call <code>(&lt; input 10)</code>.</p>
+
+<p>predicate must be a symbol.</p>
+
+<p>Example usages</p>
+
+<pre><code>(v/is string?)
+(v/is &lt; % 10)
+</code></pre>
+</div>
+          </div><div class="public">
+            <h3><a id="var-is-not" class="source var-name" href="src/arianna/api.clj">is-not</a></h3>
+            <h4 class="var-type macro" id="var-type">macro</h4>
+            <div class="usage">[predicate &amp; args]</div>
+            
+            
+            <div class="doc"><p>Returns a validator, like <code>is</code>,  which will call
+(not (predicate ~@args input)).  Supports % the same way as <code>is</code>.</p>
+
+<p> predicate must be a symbol.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-is-optional" class="source var-name" href="src/arianna/api.clj">is-optional</a></h3>
+            <h4 class="var-type macro" id="var-type">macro</h4>
+            <div class="usage">[predicate &amp; args]</div>
+            
+            
+            <div class="doc"><p>Returns a validator, like is, which will call
+(predicate ~@args input). The validation result is always true,
+but if the test is true the composite predicate will immediately
+short-circuit.  Supports % the same way as <code>is</code>.</p>
+
+<p>Example usage:
+    (v/is-optional v/absent? #{:nil :blank})</p>
+
+<p>Which prevents evaluation of subsequent validators if the value
+is nil or blank.</p>
+
+<p>Although callable anywhere, it only really makes sense to use it
+within <code>v/-&gt;&gt;</code>.</p>
+
+<p>predicate must be a symbol.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-matches-regex%3F" class="source var-name" href="src/arianna/methods.clj">matches-regex?</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[regex v]</div>
+            
+            
+            <div class="doc"><p>Returns true if the string <code>v</code> matches the given regular
+expression.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-number" class="source var-name" href="src/arianna/methods.clj">number</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[s]</div>
+            
+            
+            <div class="doc"><p>Transform method that tries to convert <code>s</code> to a number.
+Returns nil on failure.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-optional" class="source var-name" href="src/arianna.clj">optional</a></h3>
+            <h4 class="var-type var" id="var-type">var</h4>
+            
+            
+            
+            <div class="doc"><p>Shorthand for <code>(v/is-optional absent? #{:missing :nil :blank})</code>.</p>
+
+<p>Example usage:
+    (v/-&gt;&gt; :email v/optional v/email?)</p>
+
+<p>A rule that says that either <code>:email</code> is a valid email or
+it's not present.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-or" class="source var-name" href="src/arianna/api.clj">or</a></h3>
+            <h4 class="var-type macro" id="var-type">macro</h4>
+            <div class="usage">[&amp; validators]</div>
+            
+            
+            <div class="doc"><p>Takes a sequence of validators and creates a validator that
+applies them all, terminating if one succeeds.  If it does
+not succeed, it will have a validation error that keys the
+<code>or</code> validator and an <code>:errors</code> key that contains a list
+of all of the constituent errors.</p>
+
+<p>Uses the same interpretation rules as <code>and</code>.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-parse-decimal-number" class="source var-name" href="src/arianna/methods.clj">parse-decimal-number</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[s]</div>
+            
+            
+            <div class="doc"><p>Reads a number from a string. Returns nil if not a number.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-render-message" class="source var-name" href="src/arianna/runtime.clj">render-message</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[validation-error]</div>
+            
+            
+            <div class="doc"><p>Generates a human readable message from a validation error
+specified by the failing validator.</p>
+
+<p>The message rule is specified by the <code>:-message</code> key in the
+validator.  It can be either a function that takes a
+validation error or an implementation of the ValidationMessage
+protocol.  Importantly, strings implement the protocol and work
+as mustache templates.</p>
+
+<p>Stuck together with the interpretation rules of composites, the
+easiest way to set a message is by putting a string after the
+validation expression.</p>
+
+<pre><code>(v/and number?  "Input should be a number."
+       even?    "{{value}} should have been even."
+       (&lt; % 10) "{{value}} should have been less than {{validator.y}}.")
+</code></pre>
+
+<p>Usually, you won't call this method directly, but just get
+the results from <code>v/summarize</code>.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-required" class="source var-name" href="src/arianna.clj">required</a></h3>
+            <h4 class="var-type var" id="var-type">var</h4>
+            
+            
+            
+            <div class="doc"><p>Shorthand for <code>(v/is-not absent? #{:missing :nil :blank})</code>.</p>
+
+<p>Example usage:
+    (v/-&gt;&gt; :email v/required v/email?)</p>
+
+<p>A rule that says that <code>:email</code> is a valid email and is present.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-summarize" class="source var-name" href="src/arianna/runtime.clj">summarize</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[vr]</div><div class="usage">[validator input]</div>
+            
+            
+            <div class="doc"><p>Arity 1:  Turns a validation result into a map of field,
+list of message.</p>
+
+<p>Arity 2:  Summarizes the result of validating the input.</p>
+
+<p>Check the documentation for <code>render-message</code> and <code>field</code> for
+how this gets generated.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-valid%3F" class="source var-name" href="src/arianna/runtime.clj">valid?</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[{:keys [status]}]</div><div class="usage">[value validator]</div>
+            
+            
+            <div class="doc"><p>Arity 1: Returns true if the validation result is a pass.</p>
+
+<p>Arity 2: Returns true if value passes the validator.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-validate" class="source var-name" href="src/arianna/runtime.clj">validate</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[validator value]</div>
+            
+            
+            <div class="doc"><p>Validates a <code>value</code> against a <code>validator</code>.  Exceptions thrown
+during validation will be reported as validation failures
+with the exception in an <code>:exception</code> key of the validation
+error.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-validate-debug" class="source var-name" href="src/arianna/runtime.clj">validate-debug</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[validator value]</div>
+            
+            
+            <div class="doc"><p>Validates a <code>value</code> against a <code>validator</code>.  Will not catch
+exceptions the way that validate does.  Intended to assist
+with tracking down errors.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-when" class="source var-name" href="src/arianna/api.clj">when</a></h3>
+            <h4 class="var-type macro" id="var-type">macro</h4>
+            <div class="usage">[predicate &amp; validators]</div>
+            
+            
+            <div class="doc"><p>Returns a validator that only checks the validators
+when predicate validates.  Interpets all validators using the
+same rules as and.  Doesn't support trailing strings or maps
+on the first (predicate) validator.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-within%3F" class="source var-name" href="src/arianna/methods.clj">within?</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[min-incl max-incl value]</div>
+            
+            
+            <div class="doc"><p>Method that checks if its <code>value</code> is between
+min and max, both inclusive. Uses clojure.core/compare to compare
+values.</p>
+</div>
+          </div>
+        </div>
+      </div>
+    </article>
+  </body>
+
+</html>
