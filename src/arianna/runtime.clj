@@ -29,20 +29,31 @@
   {:pre (symbol? -method)}
   (if *enable-protect-exception*
     (try ((find-var -method) validator value)
-           (catch Exception exception
-             (update-in (report-failure validator value)
-                        [:errors] add-exception exception)))
+         (catch Exception exception
+           (update-in (report-failure validator value)
+                      [:errors] add-exception exception)))
     ((find-var -method) validator value)))
 
-(defn validate [validator value]
+(defn validate
+  "Validates a `value` against a `validator`.  Exceptions thrown
+   during validation will be reported as validation failures
+   with the exception in an `:exception` key of the validation
+   error."
+  [validator value]
   (strip-reduced (internal-validate validator value)))
 
-(defn validate-debug [validator value]
+(defn validate-debug
+  "Validates a `value` against a `validator`.  Will not catch
+   exceptions the way that validate does.  Intended to assist
+   with tracking down errors."
+  [validator value]
   (binding [*enable-protect-exception* false]
     (validate validator value)))
 
 (defn valid?
-  "Returns true if value passes the validator."
+  "Arity 1: Returns true if the validation result is a pass.
+
+   Arity 2: Returns true if value passes the validator."
   ([{:keys [status]}] (= :ok status))
   ([value validator] (valid? (validate validator value))))
 
@@ -69,8 +80,6 @@
   (predicate-validate this
                       (not (partial-invoke-% this value))
                       value))
-
-
 
 (defn as-key [{:keys [projection default] :as this} value]
   (report-success (if (vector? projection)
@@ -227,7 +236,27 @@
   (render-message- [this validation-error]
     (render-string this validation-error)))
 
-(defn render-message [validation-error]
+(defn render-message
+  "Generates a human readable message from a validation error
+   specified by the failing validator.
+
+   The message rule is specified by the `:-message` key in the
+   validator.  It can be either a function that takes a
+   validation error or an implementation of the ValidationMessage
+   protocol.  Importantly, strings implement the protocol and work
+   as mustache templates.
+
+   Stuck together with the interpretation rules of composites, the
+   easiest way to set a message is by putting a string after the
+   validation expression.
+
+       (v/and number?  \"Input should be a number.\"
+              even?    \"{{value}} should have been even.\"
+              (< % 10) \"{{value}} should have been less than {{validator.y}}.\")
+
+   Usually, you won't call this method directly, but just get
+   the results from `v/summarize`."
+  [validation-error]
   (if-let [message (get-in validation-error
                            [:validator :-message] nil)]
     (if (satisfies? ValidationMessage message)
@@ -245,7 +274,18 @@
   (if (contains? projections m)
     (:projection v)))
 
-(defn field [validation-error]
+(defn field
+  "Identifies the field associated with a validation error.  One
+   of the following:
+
+   * The `:-field` of the validator, if any.
+   * The projection of `v/as-key` or `v/has`.
+
+   If the `:-field` property isn't available, it will scan *back*
+   through the validation chain for a `:-field`.  If that fails,
+   it will scan *forward* through the chain for a projection.
+   Only then will it check the current validator for a projection."
+  [validation-error]
   (clojure.core/or
    (-> validation-error :validator :-field)
    (if-let [chain (:chain validation-error)]
@@ -265,7 +305,13 @@
     (transient {}) coll)))
 
 (defn summarize
-  "Turns a validation result into a map of field, list of message"
+  "Arity 1:  Turns a validation result into a map of field,
+   list of message.
+
+   Arity 2:  Summarizes the result of validating the input.
+
+   Check the documentation for `render-message` and `field` for
+   how this gets generated."
   ([vr] (if (not (valid? vr))
           (group-by-with-map field
                              render-message

@@ -8,8 +8,10 @@
                  [potemkin "0.3.3"]
                  [stencil "0.3.2"]]
   :core.typed {:check [arianna]}
-  :codox {:include [arianna]}
+  :codox {:include [arianna]
+          :writer codox-md.writer/write-docs}
   :profiles {:dev {:dependencies [[org.clojure/clojure "1.5.1"]
-                                  [org.clojure/tools.namespace "0.2.3"]]
+                                  [org.clojure/tools.namespace "0.2.4"]
+                                  [codox-md "0.2.0"]]
                    :source-paths ["dev"]}
              :clj-1.5.1 {:dependencies [[org.clojure/clojure "1.5.1"]]}})
