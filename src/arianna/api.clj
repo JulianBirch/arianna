@@ -369,13 +369,14 @@
           (/ 2))
   "
   [expr & validators]
-  `(let [v# ~expr
-         result# (r/validate (and-all @~validators) v#)]
+  `(let [val# ~expr
+         v2# (and-all ~@validators)
+         result# (r/validate v2# val#)]
      (if (r/valid? result#)
        (:result result#)
        (throw (ex-info "Validation failed"
                        {:errors (:errors result#)
                         :expr '~expr
-                        :value v#
+                        :value val#
                         :line ~(:line (meta &form))
                         :file ~*file*})))))
