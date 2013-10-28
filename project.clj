@@ -4,7 +4,7 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[spyscope "0.1.3"]
-                 [net.colourcoding/poppea "0.1.9"]
+                 [net.colourcoding/poppea "0.2.0"]
                  [potemkin "0.3.3"]
                  [stencil "0.3.2"]]
   :core.typed {:check [arianna]}
