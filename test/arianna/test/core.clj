@@ -248,14 +248,14 @@
 
 (deftest human-readable
   (let [er (-> (v/is < % 10)
-               (assoc :-message "The value {{value}} is not less than {{validator.y}}.")
+               (assoc :arianna/message "The value {{value}} is not less than {{validator.y}}.")
                (v/validate 42)
                :errors
                first)]
     (is (= "The value 42 is not less than 10."
            (v/render-message er))))
   (let [er (-> (v/is < % 10)
-               (assoc :-message
+               (assoc :arianna/message
                  #(str "Bad value was " (:value %) "."))
                (v/validate 42)
                :errors
@@ -293,7 +293,7 @@
   (is (= { nil [nil] } (v/summarize (v/->> fun?) "potty training"))
       "Field should not pick up projection fields that don't belong
 to projections.")
-  (is (= { "Hello" ["World"] } (v/summarize (v/->> fun? {:-field "Hello"} "World") "potty training"))
+  (is (= { "Hello" ["World"] } (v/summarize (v/->> fun? {:arianna/field "Hello"} "World") "potty training"))
       "Field should not pick up projection fields that don't belong
 to projections.")
   (is (= nil (v/summarize (v/is number?) 3))))

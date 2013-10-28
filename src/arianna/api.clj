@@ -24,7 +24,7 @@
   [predicate & args]
   {:pre [(symbol? predicate)]}
   `(assoc (document-partial-% ~predicate ~@args)
-     :-method `r/is))
+     :arianna/v `r/is))
 
 (defmacro ^:validator is-optional
   "Returns a validator, like is, which will call
@@ -45,7 +45,7 @@
   [predicate & args]
   {:pre [(symbol? predicate)]}
   `(assoc (document-partial-% ~predicate ~@args)
-     :-method `r/is-optional))
+     :arianna/v `r/is-optional))
 
 (defmacro ^:validator is-not
   "Returns a validator, like `is`,  which will call
@@ -55,25 +55,25 @@
   [predicate & args]
   {:pre [(symbol? predicate)]}
   `(assoc (document-partial-% ~predicate ~@args)
-     :-method `r/is-not))
+     :arianna/v `r/is-not))
 
 (defmacro ^:validator as
   "Returns a validator which will call `(projection ~@args input)`.
-   This will fail if the returned value is equal to :-fail.
+   This will fail if the returned value is equal to :arianna/fail.
    By default, this means it will fail if the returned value is nil.
 
        (v/as number)
        ;;; will fail if the input was not a number or a string
        ;;; representing a number
 
-       (assoc (v/as inc) :-fail 3)
+       (assoc (v/as inc) :arianna/fail 3)
        ;;; Will fail if the input was equal to 2
 
    Supports use of the `%` symbol, same as `is`."
   [projection & args]
   {:pre [(symbol? projection)]}
   `(assoc (document-partial-% ~projection ~@args)
-     :-method `r/as))
+     :arianna/v `r/as))
 
 (defn strip-vector [p]
   (if (clojure.core/and (vector? p) (= 1 (count p)))
@@ -106,7 +106,7 @@
    functionally identical to :x."
   [projection]
   {:pre [(valid-projection? projection)]}
-  {:-method `r/as-key
+  {:arianna/v `r/as-key
    :projection (strip-vector projection)
    :default :arianna/missing})
 
@@ -115,7 +115,7 @@
    `projection` does not have a value, the validator fails."
   [projection]
   {:pre [(valid-projection? projection)]}
-  {:-method `r/has
+  {:arianna/v `r/has
    :projection (strip-vector projection)})
 
 ;;; interpreting things as is or as
@@ -179,7 +179,7 @@
 
 (defn make-validator [vs]
   (clojure.core/->> vs
-                    (map #(if (string? %) {:-message %} %))
+                    (map #(if (string? %) {:arianna/message %} %))
                     (apply merge)))
 
 (defmacro composite
@@ -192,9 +192,9 @@
            vs (cons 'list vs)
            vals (gensym "vals")
            c `{:validators ~vals
-               :-method (symbol ~(str combine))}]
+               :arianna/v (symbol ~(str combine))}]
        `(let [~vals (map make-validator
-                         (partition-runs :-method ~vs))]
+                         (partition-runs :arianna/v ~vs))]
           ~(if force-multiple
              c
              `(clojure.core/or (single ~vals) ~c))))))
@@ -276,7 +276,7 @@
        ;;; Provides a default email address
        ;;; see also `as-key` for more details
 
-   Finally, strings are treated as maps with a `:-message` key.
+   Finally, strings are treated as maps with a `:arianna/message` key.
    These are used to provide human readable feedback by using
    stencil/mustache on the validation errors.
 
@@ -310,12 +310,12 @@
   [predicate & args]
   {:pre [(symbol? predicate)]}
   `(assoc (document-partial-% ~predicate ~@args)
-     :-method 'r/are))
+     :arianna/v 'r/are))
 
 (def always-true
   "A validator that returns true for any input.  Only really useful
    at the repl."
-  {:-method `r/always-true})
+  {:arianna/v `r/always-true})
 
 (defn- to-match-clause [[predicate then]]
   [(if (= predicate :else)
@@ -337,7 +337,7 @@
   [& clauses]
   (let [validators (map to-match-clause (partition 2 clauses))]
     `{:clauses (list ~@validators)
-      :-method `r/cond}))
+      :arianna/v `r/cond}))
 
 (defmacro ^:validator when
   "Returns a validator that only checks the validators
@@ -346,7 +346,7 @@
   on the first (predicate) validator."
   [predicate & validators]
   `{:then (and ~@validators)
-    :-method `r/when
+    :arianna/v `r/when
     :predicate (interpret-is ~predicate)})
 
 ;;; Invocation patterns

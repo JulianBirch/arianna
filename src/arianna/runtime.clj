@@ -25,14 +25,14 @@
 (defn- add-exception [[error] exception]
   (list (assoc error :exception exception)))
 
-(defn internal-validate [{:keys [-method] :as validator} value]
-  {:pre (symbol? -method)}
-  (if *enable-protect-exception*
-    (try ((find-var -method) validator value)
-         (catch Exception exception
-           (update-in (report-failure validator value)
-                      [:errors] add-exception exception)))
-    ((find-var -method) validator value)))
+(defn internal-validate [validator value]
+  (let [method (:arianna/v validator)]
+    (if *enable-protect-exception*
+      (try ((find-var method) validator value)
+           (catch Exception exception
+             (update-in (report-failure validator value)
+                        [:errors] add-exception exception)))
+      ((find-var method) validator value))))
 
 (defn validate
   "Validates a `value` against a `validator`.  Exceptions thrown
@@ -104,7 +104,7 @@
       (if (valid? result)
         result
         (enhance-error this result))
-      (if (= result (:-fail this))
+      (if (= result (:arianna/fail this))
         (report-failure this value result)
         (report-success value result)))))
 
@@ -238,8 +238,8 @@
   "Generates a human readable message from a validation error
    specified by the failing validator.
 
-   The message rule is specified by the `:-message` key in the
-   validator.  It can be either a function that takes a
+   The message rule is specified by the `:arianna/message` key
+   in the validator.  It can be either a function that takes a
    validation error or an implementation of the ValidationMessage
    protocol.  Importantly, strings implement the protocol and work
    as mustache templates.
@@ -256,19 +256,19 @@
    the results from `v/summarize`."
   [validation-error]
   (if-let [message (get-in validation-error
-                           [:validator :-message] nil)]
+                           [:validator :arianna/message] nil)]
     (if (satisfies? ValidationMessage message)
       (render-message- message validation-error)
       (message validation-error))))
 
 (defn- validator-field [v]
   (clojure.core/or
-   (:-field v)
+   (:arianna/field v)
    (:projection v)))
 
 (def projections #{'arianna.runtime/as-key 'arianna.runtime/has})
 
-(defn extract-projection [{{m :-method :as v} :validator}]
+(defn extract-projection [{{m :arianna/v :as v} :validator}]
   (if (contains? projections m)
     (:projection v)))
 
@@ -276,18 +276,19 @@
   "Identifies the field associated with a validation error.  One
    of the following:
 
-   * The `:-field` of the validator, if any.
+   * The `:arianna/field` of the validator, if any.
    * The projection of `v/as-key` or `v/has`.
 
-   If the `:-field` property isn't available, it will scan *back*
-   through the validation chain for a `:-field`.  If that fails,
-   it will scan *forward* through the chain for a projection.
-   Only then will it check the current validator for a projection."
+   If the `:arianna/field` property isn't available, it will scan
+   *back* through the validation chain for`:arianna/field`.
+   If that fails, it will scan *forward* through the chain for
+   a projection.  Only then will it check the current validator
+   for a projection."
   [validation-error]
   (clojure.core/or
-   (-> validation-error :validator :-field)
+   (-> validation-error :validator :arianna/field)
    (if-let [chain (:chain validation-error)]
-     (->> (map #(-> % :validator :-field) (reverse chain))
+     (->> (map #(-> % :validator :arianna/field) (reverse chain))
           (concat (map extract-projection chain))
           (remove nil?)
           first))
