@@ -170,10 +170,8 @@
 
 (defn thread-f [[{:keys [result] :as previous} chain] validator]
   (let [vr (internal-validate validator result)
-        chain (conj chain
-                    {:validator validator
-                     :result (:result (strip-reduced vr))})
         vr1 (strip-reduced vr)
+        chain (conj chain (assoc vr1 :validator validator))
         result (if (valid? vr1)
                  [vr1 chain]
                  [(enhance-with-chain vr1 chain)])]
@@ -306,7 +304,7 @@
 
 (defn summarize
   "Arity 1:  Turns a validation result into a map of field,
-   list of message.
+   list of message.  Returns nil on success.
 
    Arity 2:  Summarizes the result of validating the input.
 
