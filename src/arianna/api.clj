@@ -2,8 +2,8 @@
   (:refer-clojure :exclude [and comp cond or when ->>])
   (:require [arianna.runtime :as r]
             [spyscope.core]
-            [poppea :refer [document-partial-% partial-invoke-%
-                            defn-curried]]))
+            [poppea :refer [document-partial-map capture-%
+                            partial-invoke-% defn-curried]]))
 
 (defn valid-projection? [proj]
   (clojure.core/or (keyword? proj)
@@ -23,7 +23,7 @@
        (v/is < % 10)"
   [predicate & args]
   {:pre [(symbol? predicate)]}
-  `(assoc (document-partial-% ~predicate ~@args)
+  `(assoc ~(document-partial-map predicate capture-% args)
      :arianna/v `r/is))
 
 (defmacro ^:validator is-optional
@@ -44,7 +44,7 @@
    predicate must be a symbol."
   [predicate & args]
   {:pre [(symbol? predicate)]}
-  `(assoc (document-partial-% ~predicate ~@args)
+  `(assoc ~(document-partial-map predicate capture-% args)
      :arianna/v `r/is-optional))
 
 (defmacro ^:validator is-not
@@ -54,7 +54,7 @@
    predicate must be a symbol."
   [predicate & args]
   {:pre [(symbol? predicate)]}
-  `(assoc (document-partial-% ~predicate ~@args)
+  `(assoc ~(document-partial-map predicate capture-% args)
      :arianna/v `r/is-not))
 
 (defmacro ^:validator as
@@ -72,7 +72,7 @@
    Supports use of the `%` symbol, same as `is`."
   [projection & args]
   {:pre [(symbol? projection)]}
-  `(assoc (document-partial-% ~projection ~@args)
+  `(assoc ~(document-partial-map projection capture-% args)
      :arianna/v `r/as))
 
 (defn strip-vector [p]
@@ -309,7 +309,7 @@
   `predicate` must be a symbol."
   [predicate & args]
   {:pre [(symbol? predicate)]}
-  `(assoc (document-partial-% ~predicate ~@args)
+  `(assoc ~(document-partial-map predicate capture-% args)
      :arianna/v 'r/are))
 
 (def always-true
