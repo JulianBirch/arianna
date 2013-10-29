@@ -182,19 +182,25 @@
                     (map #(if (string? %) {:arianna/message %} %))
                     (apply merge)))
 
+(defn to-validators
+  [validators interpret]
+  {:pre [(symbol? interpret)]}
+  (let [vs (map (fn [v] `(~interpret ~v)) validators)]
+    `(clojure.core/->> (list ~@vs)
+                       (partition-runs :arianna/v)
+                       (map make-validator))))
+
 (defmacro composite
   ([validators interpret combine]
-     {:pre [(symbol? combine) (symbol? interpret)]}
+     {:pre [(symbol? combine)]}
      `(composite ~validators ~interpret ~combine false))
   ([validators interpret combine force-multiple]
-     {:pre [(symbol? combine) (symbol? interpret)]}
-     (let [vs (map (fn [v] `(~interpret ~v)) validators)
-           vs (cons 'list vs)
-           vals (gensym "vals")
+     {:pre [(symbol? combine)]}
+     (let [vals (gensym "vals")
            c `{:validators ~vals
-               :arianna/v (symbol ~(str combine))}]
-       `(let [~vals (map make-validator
-                         (partition-runs :arianna/v ~vs))]
+               :arianna/v (symbol ~(str combine))}
+           vs (to-validators validators interpret)]
+       `(let [~vals ~vs]
           ~(if force-multiple
              c
              `(clojure.core/or (single ~vals) ~c))))))
