@@ -323,11 +323,10 @@
    at the repl."
   {:arianna/v `r/always-true})
 
-(defn- to-match-clause [[predicate then]]
-  [(if (= predicate :else)
+(defmacro interpret-is-cond [predicate]
+  (if (= predicate :else)
      `always-true
-     `(interpret-is ~predicate))
-   `(interpret-as ~then)])
+     `(interpret-is ~predicate)))
 
 (defmacro ^:validator cond
   "Creates a validator function that checks multiple conditions. Each
@@ -337,23 +336,28 @@
   you get back the cond validator.
 
   Uses the same rules as `and` on the predicate clauses, and
-  the same rules as `->>` on the validator clauses.  However, it
-  doesn't support trailing maps or strings.  You're recommended
-  to wrap the validator clause in `->>` in those cases."
+  the same rules as `->>` on the validator clauses.  That said,
+  adding a message to the predicate is pretty pointless."
   [& clauses]
-  (let [validators (map to-match-clause (partition 2 clauses))]
-    `{:clauses (list ~@validators)
-      :arianna/v `r/cond}))
+  (let [p-clauses (to-validators clauses `interpret-is-cond)
+        t-clauses (to-validators clauses `interpret-as)]
+    `(let [c# (map #(if %1 %2 %3)
+                   (iterate not true)
+                   ~p-clauses
+                   ~t-clauses)]
+       {:clauses (partition 2 c#)
+        :arianna/v `r/cond})))
 
 (defmacro ^:validator when
-  "Returns a validator that only checks the validators
-  when predicate validates.  Interpets all validators using the
-  same rules as and.  Doesn't support trailing strings or maps
-  on the first (predicate) validator."
-  [predicate & validators]
-  `{:then (and ~@validators)
-    :arianna/v `r/when
-    :predicate (interpret-is ~predicate)})
+  "Returns a validator that only checks the following validators
+  when the first validates.  Interpets all validators using the
+  same rules as and."
+  [& validators]
+  (let [v (to-validators validators `interpret-is)]
+    `(let [[pred# then#] ~v]
+       {:then then#
+        :arianna/v `r/when
+        :predicate pred#})))
 
 ;;; Invocation patterns
 
