@@ -138,26 +138,31 @@
      (predicate-operators n)
      (ends-with? n "?"))))
 
-(defmacro interpret-internal [v as-key as]
+(defn interpret-is-fn [v]
+  (if (valid-projection? v)
+    (has v)
+    v))
+
+(defn interpret-as-fn [v]
+  (if (valid-projection? v)
+    (as-key v)
+    v))
+
+(defmacro interpret-internal [v as interpret-fn]
   (clojure.core/or
-   (if (valid-projection? v)
-     `(~as-key ~v)
-     (let [v (if (seq? v) v (list v))
-           f (first v)]
-       (if (enhancable? f)
-         (if (predicate-symbol? f)
-           `(is ~@v)
-           `(~as ~@v)))))
-   `(let [v# ~v]
-      (if (valid-projection? v#)
-        (~as-key v#)
-        v#))))
+   (let [v (if (seq? v) v (list v))
+         f (first v)]
+     (if (enhancable? f)
+       (if (predicate-symbol? f)
+         `(is ~@v)
+         `(~as ~@v))))
+   `(~interpret-fn ~v)))
 
 (defmacro interpret-is [v]
-  `(interpret-internal ~v has is))
+  `(interpret-internal ~v is interpret-is-fn))
 
 (defmacro interpret-as [v]
-  `(interpret-internal ~v as-key as))
+  `(interpret-internal ~v as interpret-as-fn))
 
 ;;; composites
 
