@@ -81,19 +81,6 @@
                       (not (partial-invoke-% this value))
                       value))
 
-(defn as-key [{:keys [projection default] :as this} value]
-  (report-success (if (vector? projection)
-                    (get-in value projection default)
-                    (get value projection default))))
-
-(defn has [{:keys [projection] :as this} value]
-  (let [result (if (vector? projection)
-                 (get-in value projection ::missing)
-                 (get value projection ::missing))]
-    (if (= ::missing result)
-      (report-failure this value)
-      (report-success value result))))
-
 (defn enhance-error [this result]
   (update-in result [:errors]
              (fn [e] (map #(assoc % :validator this) e))))
@@ -261,16 +248,13 @@
       (render-message- message validation-error)
       (message validation-error))))
 
-(defn- validator-field [v]
-  (clojure.core/or
-   (:arianna/field v)
-   (:projection v)))
-
-(def projections #{'arianna.runtime/as-key 'arianna.runtime/has})
+(def projections #{#'clojure.core/get #'clojure.core/get-in})
 
 (defn extract-projection [{{m :arianna/v :as v} :validator}]
-  (if (contains? projections m)
-    (:projection v)))
+  (if (= m `as)
+    (let [f (:poppea/function v)]
+      (clojure.core/cond (= f #'clojure.core/get) (:key v)
+                         (= f #'clojure.core/get-in) (:ks v)))))
 
 (defn field
   "Identifies the field associated with a validation error.  One

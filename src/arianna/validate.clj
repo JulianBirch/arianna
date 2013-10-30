@@ -69,4 +69,6 @@
   If the structure does not contain ks, returns an error. See also
   if-in."
   [ks & validators]
-  `(a/->> (a/has ~ks) (a/and ~@validators)))
+  `(a/->> (a/as-key ~ks)
+          (a/is-not a/absent? #{:missing})
+          (a/and ~@validators)))

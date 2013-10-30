@@ -1,6 +1,7 @@
 (ns arianna.api
   (:refer-clojure :exclude [and comp cond or when ->>])
   (:require [arianna.runtime :as r]
+            [arianna.methods :as m]
             [spyscope.core]
             [poppea :refer [document-partial-map capture-%
                             partial-invoke-% defn-curried]]))
@@ -8,6 +9,11 @@
 (defn valid-projection? [proj]
   (clojure.core/or (keyword? proj)
                    (vector? proj)))
+
+(defn strip-vector [p]
+  (if (clojure.core/and (vector? p) (= 1 (count p)))
+    (first p)
+    p))
 ;;; Validator-creating macros
 
 (defmacro ^:validator is
@@ -75,11 +81,6 @@
   `(assoc ~(document-partial-map projection capture-% args)
      :arianna/v `r/as))
 
-(defn strip-vector [p]
-  (if (clojure.core/and (vector? p) (= 1 (count p)))
-    (first p)
-    p))
-
 (defn ^:validator as-key
   "Returns a validator which will look into a map.
    Takes a keyword or a vector.  as-key never fails and
@@ -106,17 +107,22 @@
    functionally identical to :x."
   [projection]
   {:pre [(valid-projection? projection)]}
-  {:arianna/v `r/as-key
-   :projection (strip-vector projection)
-   :default :arianna/missing})
+  (let [v (strip-vector projection)]
+    (assoc
+        (if (vector? v)
+          (as get-in % v :arianna/missing)
+          (as get % v :arianna/missing))
+      :arianna/fail :arianna/never)))
 
 (defn ^:validator has
   "`has` behaves the same as `as-key`, expect that if the
    `projection` does not have a value, the validator fails."
   [projection]
   {:pre [(valid-projection? projection)]}
-  {:arianna/v `r/has
-   :projection (strip-vector projection)})
+  (let [v (strip-vector projection)]
+    (if (vector? v)
+      (is m/contains-in? % v)
+      (is contains? % v))))
 
 ;;; interpreting things as is or as
 
@@ -262,7 +268,7 @@
    * `string?` becomes `(v/is string?)`
    * `inc` becomes `(v/as inc)`
    * `:key` becomes `(v/as-key :key)`
-   * `[\"City\" \"Zip\"] becomes `(v/as-key `[\"City\" \"Zip\"])
+   * `[\"City\" \"Zip\"]` becomes `(v/as-key [\"City\" \"Zip\"])`
 
    `is` is used if the name of the function ends with a question
    mark or if it's a comparison operator in clojure.core.

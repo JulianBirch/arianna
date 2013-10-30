@@ -7,9 +7,9 @@
    some way.  Rules should be a set.  The possible values of the
    set are:
 
-   * `:nil`: return true if the value is `nil`
-   * `:blank`: return true if the value is an empty string
-   * `:missing`: return true if the value is `:arianna/missing`
+   * `:nil` - return true if the value is `nil`
+   * `:blank` - return true if the value is an empty string
+   * `:missing` - return true if the value is `:arianna/missing`
 
    The last, `:missing` is a special value returned by `as-key`
    when it fails to find the key."
@@ -42,7 +42,7 @@
 
 ;;; Direct rip from libnoir
 
-(defn matches-regex?
+(defn regex-match?
   "Returns true if the string `v` matches the given regular
    expression."
   [regex v]
@@ -51,7 +51,7 @@
 (defn email?
   "Returns true if `v` is an email address."
   [v]
-  (matches-regex? #"(?i)[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?" v))
+  (regex-match? #"(?i)[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?" v))
 
 ; http://stackoverflow.com/questions/2640169/whats-the-easiest-way-to-parse-numbers-in-clojure
 
@@ -68,3 +68,8 @@
    Returns nil on failure."
   [s]
   (if (number? s) s (parse-decimal-number s)))
+
+(defn contains-in? [coll key]
+  "The equivalent of `contains?` for vectors.  The counterpart
+   of `get-in` and `get`."
+  (not= ::missing (get-in coll key ::missing)))

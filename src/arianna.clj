@@ -20,7 +20,7 @@
   absent?
   in-range?
   within?
-  matches-regex?
+  regex-match?
   email?
   parse-decimal-number
   number]
