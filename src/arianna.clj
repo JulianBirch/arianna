@@ -23,7 +23,8 @@
   regex-match?
   email?
   parse-decimal-number
-  number]
+  number
+  contains-in?]
  [arianna.api
 
   is

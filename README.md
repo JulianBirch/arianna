@@ -2,69 +2,67 @@
 
 Arianna is a Clojure data validation library. Specifically, it's a fork of Stuart Sierra's excellent [validate](https://github.com/stuartsierra/validate) library.  That said, I'm not averse to ripping off code and good ideas from other validation libraries including [Validateur](https://github.com/michaelklishin/validateur) and [libnoir](https://github.com/noir-clojure/lib-noir).
 
-**ALPHA code:** Even with ripping off Stuart Sierra's design, this is a young library.  Pretty much the entire API is subject to change
-without warning in subsequent 0.x releases.
-
-## Description
-
-A *validator* is a data structure.  When you call `(v/validate validator input)` it will return a *validation result*, a record with the following fields
-* `:result` The result of the transformation, or nil if the validator is a straight predicate.
-* `:input` The input to the validator
-* `:status` Either `:ok` or `:error`.  You're better off calling `(v/valid? validation-result)` than using this directly.
-* `:errors` A sequence of *validation errors*.
-
-Validation errors are
-* `:validator` The validator that failed.
-* `:value` The value that caused the failure
-* `:chain` The execution chain that gave rise to the value.
-
 Most of this library consists of tools to create and compose
-validators.
+validators.  Actual validation logic is just handled by normal
+Clojure functions with no special rules so, for instance, if
+you want to check something is a string, you just use `string?`.
+If you want to check the keys of a map, you just call `keys`.  There
+are a couple of useful functions such as `v/email?` for common
+cases.
 
 Note that you can compose validators, so the result of one validator becomes the input to the next.
 
-## Goals
-
-The goal of this library is to construct validators which:
-
-1. Are fully composable
-2. Do not assume anything about the input structure
-   (e.g. that it is a map)
-3. Return data structures (for internationalization or further
-   processing) instead of strings
-4. Return a description of what failed and why
-5. Validators are data
-6. Provides a full trace of the cause of a failure.
-7. Support web form validation naturally
-
-Note that the passing branch in arianna is slower than the original validate library.
-
-### Unachieved goals
-
-1. Support ClojureScript
-2. Support asynchronous validation
-
-Obviously, async is likely to result in a serious API change.
+**ALPHA code:** Even with ripping off Stuart Sierra's design, this is a young library.  Pretty much the entire API changed between 0.1 and 0.2, although the philosphy has not.  It's just that 0.2 achieves its aims better than 0.1.
 
 ## Releases and Dependency Information
 
 Available on Clojars
 
 ```clj
-[net.colourcoding/arianna "0.1.2"]
+[net.colourcoding/arianna "0.2.0"]
 ```
 
 ## Example Usage
 
+Here's a fully worked example (we'll explain how it works later)
+
 ```clj
     (require '[arianna :as v])
+
+    (v/summarize
+
+      (v/and-all (v/->> keys (v/are keyword?))
+                 (v/->> values (v/are string?))
+                 (v/->> :email v/optional
+                        email? "{{value}} is not a valid email.")
+                 (v/->> :name v/require "You must enter a name.")
+                 (v/->> :message v/require "You must enter a message."
+                        count (> % 20) "Message must be longer than {{validator.y}} characters."))
+         input)
 ```
+
+will give a result something like
+
+```clj
+{:email ["xxx is not a valid email"]
+ :name ["You must enter a name"]
+ :message ["Message must be longer than 20 characters."]}
+```
+
+Or `nil` if the input passes (making the result suitable for use within `if-let`).
+
+If you want the full data structure for what failed, you call
+`v/validate` instead.  You can call `v/valid?` on that result
+to check if it passes.
+
+The following is a quick introduction to the libraries.  More
+details are available in the API docs.
 
 ### Creating Validation Functions
 
 N.B.  It's well worth checking out the unit tests to see how the library is used.
 
-The `is` and `is-not` macros transform any boolean predicate function into a validator that contains the original expression in the `:expected` key:
+The primitive validation macros are: `is`, `is-not` and `are`.  They transform boolean predicate function into a validator:
 
 ```clj
     (def number-validator (v/is number?))
@@ -80,47 +78,150 @@ The `is` and `is-not` macros transform any boolean predicate function into a val
           :result nil
           :errors [{:validator number-validator :value "hi"}]
           :input "hi"}
-
-    (:expected number-validator)
-    ;;=> (v/is number?)
 ```
 
-The `is` macro only works on symbols. You can transform an abitrary
-boolean predicate function into a validator with the
-`validator` function. `validator` takes a predicate and an optional
-validator description, which must be a map and will be merged into
-the validator (and hence accessible via the errors).
+If the function doesn't take the input as the last parameter, you
+can indicate its position with `%`.
 
-```clj
-    (def under-10
-      (v/validator #(< % 10) {:error "must be less than 10"}))
-
-    (:error under-10)
-    ;;=> "must be less than 10"
-
-    (under-10 42)
-    ;;=> {:status :error
-          :result nil
-          :errors [{:validator under-10 :value nil}]
-          :input "hi}
 ```
+   (defn less-than-10 (v/is < % 10))
+```
+
+`has` takes a keyword or a vector, `k`, and expands to
+`(v/is contains? % k)` or `(v/is contains-in? % k)` as appropriate.
+Single element vectors are stripped to their value.
+
+Finally, there is `is-optional`, which is only really useful in
+conjunction with `v/->>`.  There's more information in the API
+docs.
 
 ### Transform Validations
 
 There's an equivalent macro for transform validations: `as`.
-The equivalent of `validator` is `transform`.
-`transform` takes an optional second parameter, which is the
-value a transform returns when it fails.  The default is nil.
 
 ```clj
-    (v/validate (v/as v/as-decimal-number) "4")
+    (v/validate (v/as v/number) "4")
     ;;=> {:status :ok, :result 4, :errors nil, :input "4"}
 ```
 
-### Assertions
+There is also an equivalent of `has`, `as-key`.  `as-key` always
+passes, and returns the special value `:arianna/missing` if the
+key is not present.
 
-Normally you would not call a validator directly but instead
-pass it to the `assert-valid` macro, which throws an exception if the
+### Combining Validation Functions
+
+The `and` function combines multiple validation functions into one.
+This is not the same as `clojure.core/and`, but it does short-circuit
+the same way:
+
+```clj
+    (def odd-integer
+      (v/and (v/is integer?)
+             (v/is odd?)))
+
+    (odd-integer 4)
+    ;;=> ({:expected (v/is odd?), :value 4})
+
+    (odd-integer 4.0)
+    ;;=> ({:expected (v/is integer?), :value 4.0})
+```
+
+`and-all` does the same, but does not short circuit.  This is better
+for when you want to provide more feedback and less useful when later
+feedback would be redundant.
+
+There's also a short syntax which makes it a lot more convenient:
+
+```clj
+(def odd-integer (v/and integer? odd?))
+```
+
+You can also follow validators with strings to provide them with
+human-readable feedback through `v/summarize`.
+
+```clj
+(def odd-integer (v/and integer? "Should be an integer."
+                        odd? "Should be odd."))
+```
+
+It also supports `or`, which works as you might imagine.
+
+### Threading
+
+Here's the interesting bit: you can compose transform validators.
+
+```
+  (v/->> :email v/required v/email?)
+```
+
+is equal to
+
+```
+  (v/->> (v/as-key :email)
+         (v/is-not v/absent? #{:missing :nil :blank})
+         (v/is v/email?))
+```
+
+### Validating Collectinos
+
+The `every` function transforms a list of validators into a
+validator that operates on each element of a collection:
+
+```clj
+    (v/validate (v/every even?) [4 3 8 15])
+```
+
+Will give two errors, one keyed by 3 and one by 15.
+
+The `are` macro is a synonym for `every`.
+
+`are` composes effectively with the threading macro to give more capabilities.  For map-like collections, you can thread `keys` and `vals` to apply validations to the keys and values of the map, respectively:
+
+```clj
+    (def are-string (v/are string?))
+    (def simple-map
+      (v/and (v/->> keys (v/are keyword?))
+             (v/->> vals are-string)))
+
+
+    (v/validate simple-map {:a "one", :b 2})
+    ;;=> {:errors ({:validator (v/is string?), :value 2})
+```
+
+You can also use `count` to validate facts about the number of
+elements in a collection:
+
+```clj
+    (v/validate (v/->> count (< % 4))) [:a :b :c :d :e])
+```
+
+or, for that matter, strings.
+
+```clj
+    (v/validate (/->> count (in-range? 3 10)) "password")
+```
+
+### Branching
+
+There are two branching constructs: `cond` and `when`.  `cond` takes
+pairs of test and transform validators.
+
+## Results of validate
+
+A *validator* is a data structure.  When you call `(v/validate validator input)` it will return a *validation result*, a record with the following fields
+* `:result` The result of the transformation, or nil if the validator is a straight predicate.
+* `:input` The input to the validator
+* `:status` Either `:ok` or `:error`.  You're better off calling `(v/valid? validation-result)` than using this directly.
+* `:errors` A sequence of *validation errors*.
+
+Validation errors are
+* `:validator` The validator that failed.
+* `:value` The value that caused the failure
+* `:chain` The execution chain that gave rise to the value.  This a sequence of validation results assoced with the :validator that gave rise to them.
+
+## Assertions
+
+If you need to validate internal data, rather than business data, the `assert-valid` macro can be useful.  It throws an exception if the
 validation fails:
 
 ```clj
@@ -151,117 +252,6 @@ making it suitable for pipelining:
     ;;=> 145
 ```
 
-There is also a function, `valid?`, that returns true if the
-validation passes or false if it does not:
-
-```clj
-    (v/valid? "hello" (v/is string?))
-    ;;=> true
-```
-
-### Combining Validation Functions
-
-The `and` function combines multiple validation functions into one.
-This is not the same as `clojure.core/and`, but it does short-circuit
-the same way:
-
-```clj
-    (def odd-integer
-      (v/and (v/is integer?)
-             (v/is odd?)))
-
-    (odd-integer 4)
-    ;;=> ({:expected (v/is odd?), :value 4})
-
-    (odd-integer 4.0)
-    ;;=> ({:expected (v/is integer?), :value 4.0})
-```
-
-`and-all` does the same, but does not short circuit.  This is better
-for when you want to provide more feedback and less useful when later
-feedback would be redundant.
-
-It also supports `or` and `comp`, which work as you might imagine.
-Parameters that aren't validators get `transform` called on them.
-
-### Branching
-
-There are two branching constructs: `cond` and `when`.  `cond` takes
-pairs of test and transform validators.
-
-### Looking Inside Collections
-
-The `every` function transforms a simple validation function into a
-validation function that operates on each element of a collection:
-
-```clj
-    ((v/every (v/is even?)) [4 3 8 15])
-    ;;=> ({:value 3, etc}
-    ;;    {:value 15, etc})
-```
-
-The `are` macro is shorthand for `every` and `is`.
-
-```clj
-    ((v/are even?) [4 3 8 15])
-```
-
-For map-like collections, you can use `keys` and `vals` to apply
-validations to the keys and values of the map, respectively:
-
-```clj
-    (def are-string (v/are string?))
-    (def simple-map
-      (v/and (v/keys (v/are keyword?)) (v/vals are-string)))
-
-
-    (v/validate simple-map {:a "one", :b 2})
-    ;;=> {:errors ({:expected are-string, :value 2})
-```
-
-You can also use `count` to validate facts about the number of
-elements in a collection:
-
-```clj
-    ((v/count (v/validator #(< % 4))) [:a :b :c :d :e])
-```
-
-(This error message needs work.)
-
-More generally, you can call any function on the input and perform
-additional validation on the return value of that function with the
-`call` macro and `call-fn` function.
-
-### Looking Inside Maps
-
-When you know that certain keys should be present in a map, you can
-check that their values pass additional validation checks. The `in`
-function takes a vector of keys and one or more validation functions.
-It returns a validation function that navigates into the map as with
-Clojure's `get-in` function and runs the validation functions on the
-value.
-
-```clj
-    (def john {:name "John Doe", :address {:city "Baltimore"}})
-
-    (v/valid? (v/in [:address :city] (v/is string?)) john)
-    ;;=> true
-
-    (v/valid? (v/in [:address :zip] (v/is integer?)) john)
-    ;;=> false
-```
-
-With `in`, the map must contain the given keys or it fails the
-validation. An alternate form, `if-in`, allows the validation to pass
-if any keys are missing.
-
-```clj
-    (v/valid? (v/if-in [:address :zip] (v/is integer?)) john)
-    ;;=> true
-```
-
-(Optionals need more work.)
-
 ## Development and Contributing
 
 All pull requests, issues and conversations are welcome, but I do
@@ -271,6 +261,24 @@ ask that any changes come with tests that demonstrate the original problem.
 
 ### Why is it called Arianna?
 [Listen](http://www.youtube.com/watch?v=VZc2npAmQXM)
+
+### What's the aim of the library?
+
+The library aims to allow to
+
+1. use normal clojure functions to perform validation
+2. give you a full trace of any failures
+3. validate anything, but provide useful features for validating
+maps from web forms and json posts.
+
+What it explicitly doesn't want to be, is a type system like [Schema](https://github.com/Prismatic/schema).
+
+### Unachieved goals
+
+1. Support ClojureScript
+2. Support asynchronous validation
+
+Obviously, async is likely to result in a serious API change.
 
 ### Why yet another validation library?
 
