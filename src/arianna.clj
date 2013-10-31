@@ -51,6 +51,7 @@
   "Shorthand for `(v/is-optional absent? #{:missing :nil :blank})`.
 
    Example usage:
+
        (v/->> :email v/optional v/email?)
 
    A rule that says that either `:email` is a valid email or
@@ -61,7 +62,8 @@
   "Shorthand for `(v/is-not absent? #{:missing :nil :blank})`.
 
    Example usage:
+
        (v/->> :email v/required v/email?)
 
-   A rule that says that `:email` is a valid email and is present."
+   A rule that says that `:email` is both present and a valid email."
   (is-not absent? #{:missing :nil :blank}))

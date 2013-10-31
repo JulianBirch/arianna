@@ -261,7 +261,7 @@
    of the following:
 
    * The `:arianna/field` of the validator, if any.
-   * The projection of `v/as-key` or `v/has`.
+   * The projection of `v/as-key`.
 
    If the `:arianna/field` property isn't available, it will scan
    *back* through the validation chain for`:arianna/field`.

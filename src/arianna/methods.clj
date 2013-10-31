@@ -11,7 +11,8 @@
    * `:blank` - return true if the value is an empty string
    * `:missing` - return true if the value is `:arianna/missing`
 
-   The last, `:missing` is a special value returned by `as-key`
+   The last, `:missing` checks for the special value
+   `:arianna/missing` returned by `as-key`
    when it fails to find the key."
   [rules value]
   (clojure.core/or
@@ -34,8 +35,8 @@
 
 (defn within?
   "Method that checks if its `value` is between
-   min and max, both inclusive. Uses clojure.core/compare to compare
-   values."
+   `min-incl` and `max-incl`, both inclusive. Uses
+   `clojure.core/compare` to compare values."
   [min-incl max-incl value]
   (not (clojure.core/or (neg? (compare value min-incl))
                         (pos? (compare value max-incl)))))
@@ -69,7 +70,9 @@
   [s]
   (if (number? s) s (parse-decimal-number s)))
 
-(defn contains-in? [coll key]
+(defn contains-in?
   "The equivalent of `contains?` for vectors.  The counterpart
-   of `get-in` and `get`."
+   of `get-in` and `get`.  Normally you won't want to call it
+   directly, but `v/has` uses it."
+  [coll key]
   (not= ::missing (get-in coll key ::missing)))

@@ -21,7 +21,7 @@
    Can use clojure's % syntax like an anonymous function, so
    `(v/is < % 10)` will call `(< input 10)`.
 
-   predicate must be a symbol.
+   `predicate` must be a symbol.
 
    Example usages
 
@@ -34,11 +34,12 @@
 
 (defmacro ^:validator is-optional
   "Returns a validator, like is, which will call
-   (predicate ~@args input). The validation result is always true,
+   `(predicate ~@args input)`. The validation result is always true,
    but if the test is true the composite predicate will immediately
-   short-circuit.  Supports % the same way as `is`.
+   short-circuit.  Supports `%` the same way as `is`.
 
    Example usage:
+
        (v/is-optional v/absent? #{:nil :blank})
 
    Which prevents evaluation of subsequent validators if the value
@@ -47,7 +48,7 @@
    Although callable anywhere, it only really makes sense to use it
    within `v/->>`.
 
-   predicate must be a symbol."
+   `predicate` must be a symbol."
   [predicate & args]
   {:pre [(symbol? predicate)]}
   `(assoc ~(document-partial-map predicate capture-% args)
@@ -55,9 +56,10 @@
 
 (defmacro ^:validator is-not
   "Returns a validator, like `is`,  which will call
-  (not (predicate ~@args input)).  Supports % the same way as `is`.
+  `(not (predicate ~@args input))`.
+   Supports `%` the same way as `is`.
 
-   predicate must be a symbol."
+   `predicate` must be a symbol."
   [predicate & args]
   {:pre [(symbol? predicate)]}
   `(assoc ~(document-partial-map predicate capture-% args)
@@ -83,28 +85,34 @@
 
 (defn ^:validator as-key
   "Returns a validator which will look into a map.
-   Takes a keyword or a vector.  as-key never fails and
+   Takes a keyword or a vector.  `as-key` never fails and
    if the map doesn't have the key specified the result
-   will be the special value :arianna/missing.  You can test
-   for this with v/required, v/optional or
-   (v/is v/absent? #{:missing}).  (The first two also test for
+   will be the special value `:arianna/missing`.  You can test
+   for this with `v/required`, `v/optional` or
+   `(v/is v/absent? #{:missing})`.  (The first two also test for
    nil and blank strings.)
 
-   The validator has two keys: `:projection` which is the
-   input parameter and `:default`, which is the value returned
+   Expands to one of
+
+       (as get-in % v :arianna/missing)
+       (as get % v :arianna/missing)
+
+   And sets `:arianna/fail` to  `:arianna/never`.
+
+   The `:not-found` key is the value returned
    if the value is missing.
 
        (v/as-key :x)
        ;;; Returns :arianna/missing if :x is not present
-       (assoc (v/as-key :x) :default 3)
+       (assoc (v/as-key :x) :not-found 3)
        ;;; Returns 3 if :x is not present
-       (v/->> :x {:default 3})
+       (v/->> :x {:not-found 3})
        ;;; Exactly the same as the last example
 
-   Note that :projection will have
-   the vector removed if it's a vector with one element.  (This
-   makes reporting the results simpler later, since [:x] is
-   functionally identical to :x."
+   Note that `get` will be used if `as-key` is given a vector
+   with one element.  (This makes reporting the results simpler
+   later, since `get-in [:x]` is functionally identical to
+   `get :x`.)"
   [projection]
   {:pre [(valid-projection? projection)]}
   (let [v (strip-vector projection)]
@@ -116,7 +124,12 @@
 
 (defn ^:validator has
   "`has` behaves the same as `as-key`, expect that if the
-   `projection` does not have a value, the validator fails."
+   `projection` does not have a value, the validator fails.
+
+   Expands to one of
+
+       (is m/contains-in? % v)
+       (is contains? % v)"
   [projection]
   {:pre [(valid-projection? projection)]}
   (let [v (strip-vector projection)]
@@ -238,7 +251,8 @@
    * `[\"City\" \"Zip\"] becomes `(v/as-key `[\"City\" \"Zip\"])
 
    Note the differences:
-   * inc is treated as a test (since a transform would make no sense)
+
+   * `inc` is treated as a test (since a transform would make no sense)
    * if `:key` cannot be found, it's treated as a validation failure."
   [& validators]
   `(composite ~validators interpret-is r/and))
@@ -289,7 +303,7 @@
    Next, if you follow a validator with a map, it will be merged
    into the validator.
 
-       (v/->> :email {:default \"xjobcon@phx.cam.ac.uk\"})
+       (v/->> :email {:not-found \"xjobcon@phx.cam.ac.uk\"})
        ;;; Provides a default email address
        ;;; see also `as-key` for more details
 
@@ -321,7 +335,9 @@
 
 (defmacro ^:validator are
   "Returns a validator which will call `(predicate ~@args x)` on
-   every element `x` in the input value.
+   every element `x` in the input value.  Can use clojure's %
+   syntax like an anonymous function, so `(v/are < % 10)` will
+   call `(< input 10)` on each element.
 
   `predicate` must be a symbol."
   [predicate & args]

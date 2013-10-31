@@ -219,6 +219,61 @@ Validation errors are
 * `:value` The value that caused the failure
 * `:chain` The execution chain that gave rise to the value.  This a sequence of validation results assoced with the :validator that gave rise to them.
 
+### Exceptions
+
+Exceptions will be caught by `v/validate` and `v/summarize` and
+treated as validation failures.  The validation error will have
+a key `:exception` which contains the original exception.
+
+`v/debug-validate` doesn't catch the exceptions and is useful
+on the repl.
+
+## Human readable feedback
+
+Let's say you've got a map
+
+```clj
+(defn u {:user "moomin" :password "zog"})
+```
+
+and a validator
+```clj
+    (def pass (v/->> :password
+                     count
+                     (in-range? 6 10)
+                     "Password length must be between {{validator.min-incl}} characters and {{validator.max-excl}}."))
+```
+
+The string is associated with the previous validator.  The messages
+are mustache templates applied to validation errors keyed by the
+validator.  `{{value}}` is the value entered into the validator.
+`{{validator.min-incl}}` is the `min-incl` parameter to the
+function.  If that doesn't make you choose decent parameter
+names, nothing will.
+
+The `v/summarize` function can be used to process these strings:
+
+```
+    (v/summarize pass u)
+    ;;; {:password ["Password length must between 6 and 10."]}
+```
+
+You can associate any information you like with the validator by
+either a) just calling assoc on a primitive or b) putting
+a hash-map after it in a composite.  If you want to override the
+key, you set the `:arianna/field` key.  This is pretty useful
+where the system can't deduce the field.
+
+```
+    (defn matching-fields? [f1 f2 input]
+        (= (get f1 input) (get f2 input)))
+
+    (def repeat-email
+         (v/->> (matching-fields? :email :repeat-email)
+                "Email and Repeat Email fields don't match."
+                {:arianna/field :repeat-email}))
+```
+
 ## Assertions
 
 If you need to validate internal data, rather than business data, the `assert-valid` macro can be useful.  It throws an exception if the
