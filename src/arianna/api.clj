@@ -248,7 +248,7 @@
    * `string?` becomes `(v/is string?)`
    * `inc` becomes `(v/is inc)`
    * `:key` becomes `(v/has :key)`
-   * `[\"City\" \"Zip\"]` becomes `(v/as-key `[\"City\" \"Zip\"])
+   * `[\"City\" \"Zip\"]` becomes `(v/as-key [\"City\" \"Zip\"])`
 
    Note the differences:
 
