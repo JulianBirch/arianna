@@ -19,8 +19,10 @@ Note that you can compose validators, so the result of one validator becomes the
 Available on Clojars
 
 ```clj
-[net.colourcoding/arianna "0.2.0"]
+    [net.colourcoding/arianna "0.2.0"]
 ```
+
+You can read the [full API docs](http://julianbirch.github.io/arianna/arianna.html), but I'd recommend finishing this readme first.
 
 ## Example Usage
 
