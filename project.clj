@@ -1,4 +1,4 @@
-(defproject net.colourcoding/arianna "0.2.0"
+(defproject net.colourcoding/arianna "0.2.1"
   :description "YANIH validation library"
   :url "https://github.com/JulianBirch/arianna"
   :license {:name "Eclipse Public License"

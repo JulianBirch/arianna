@@ -290,9 +290,8 @@
   (is (= {:x ["String 9"]
           :y ["Integer X"]}
          (v/summarize complex {:x 9 :y "X"})))
-  (is (= { nil [nil] } (v/summarize (v/->> fun?) "potty training"))
-      "Field should not pick up projection fields that don't belong
-to projections.")
+  (let [[k v] (first (v/summarize (v/->> fun?) "potty training"))]
+    (is (not (nil? v)) "You should always get a message even if you didn't specify it."))
   (is (= { "Hello" ["World"] } (v/summarize (v/->> fun? {:arianna/field "Hello"} "World") "potty training"))
       "Field should not pick up projection fields that don't belong
 to projections.")

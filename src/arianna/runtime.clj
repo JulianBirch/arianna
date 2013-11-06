@@ -243,7 +243,7 @@
    the results from `v/summarize`."
   [validation-error]
   (if-let [message (get-in validation-error
-                           [:validator :arianna/message] nil)]
+                           [:validator :arianna/message] pr-str)]
     (if (satisfies? ValidationMessage message)
       (render-message- message validation-error)
       (message validation-error))))
